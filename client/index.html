@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hệ Thống Bình Chọn Trực Tuyến Smart Contract</title>
+    <link rel="stylesheet" href="css/style.css">
+    <!-- Ethers.js v6 CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
+</head>
+<body>
+    <header class="navbar">
+        <div class="brand">
+            <span>🗳️</span> E-Voting DApp
+        </div>
+        <div class="nav-right">
+            <span id="walletAddress" class="wallet-badge"></span>
+            <button id="btnConnect" class="btn btn-primary">Kết Nối Ví MetaMask</button>
+        </div>
+    </header>
+
+    <main class="container">
+        <!-- Thông tin phiên biểu quyết -->
+        <section class="card">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <h1 id="electionTitle" style="font-size: 1.5rem;">Đang tải cuộc bầu chọn...</h1>
+                <span id="electionStatusBadge" class="badge-status badge-open">Đang diễn ra</span>
+            </div>
+            <p id="electionDesc" style="color: var(--text-muted); margin-bottom: 16px;">
+                Cử tri được ủy quyền trong Whitelist kết nối ví để thực hiện bỏ phiếu minh bạch lên Blockchain.
+            </p>
+            <div style="display: flex; gap: 24px; font-size: 0.9rem; color: var(--text-muted);">
+                <div>⏳ Thời gian kết thúc: <strong id="endTimeText">--:--</strong></div>
+                <div>👤 Quyền hạn ví: <strong id="whitelistStatusText">Chưa xác định</strong></div>
+            </div>
+        </section>
+
+        <!-- Danh sách ứng viên / phương án -->
+        <section>
+            <h2 style="font-size: 1.25rem; margin-bottom: 16px;">Danh Sách Ứng Viên / Phương Án</h2>
+            <div id="candidatesContainer" class="grid">
+                <!-- Template demo khi chưa tải xong -->
+                <div class="candidate-card">
+                    <div>
+                        <h3 style="margin-bottom: 8px;">Ứng viên mẫu #1</h3>
+                        <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 16px;">
+                            Bản mô tả cương lĩnh hành động hoặc thông tin dự án lấy ý kiến.
+                        </p>
+                    </div>
+                    <div>
+                        <div style="font-weight: 700; font-size: 1.2rem; color: var(--primary); margin-bottom: 12px;">
+                            0 phiếu
+                        </div>
+                        <button class="btn btn-primary" style="width: 100%;" disabled>Bỏ Phiếu</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Trạng thái xác thực giao dịch sau khi vote -->
+        <section id="txReceiptCard" class="card" style="margin-top: 32px; display: none;">
+            <h3 style="color: var(--success); margin-bottom: 8px;">✅ Bỏ phiếu thành công!</h3>
+            <p style="font-size: 0.9rem; margin-bottom: 8px;">Mã băm giao dịch (TxHash) đã được ghi nhận trên Blockchain:</p>
+            <p id="txHashDisplay" style="font-family: monospace; background: #f1f5f9; padding: 10px; border-radius: 6px; word-break: break-all;"></p>
+        </section>
+    </main>
+
+    <script src="js/app.js"></script>
+</body>
+</html>

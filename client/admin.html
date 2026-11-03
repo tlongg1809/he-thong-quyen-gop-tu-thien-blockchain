@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quản Trị Bầu Chọn - Smart Contract Admin</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
+</head>
+<body>
+    <header class="navbar">
+        <div class="brand">
+            <span>⚙️</span> Ban Tổ Chức (Admin Panel)
+        </div>
+        <div class="nav-right">
+            <span id="walletAddress" class="wallet-badge"></span>
+            <button id="btnConnect" class="btn btn-primary">Kết Nối Ví Admin</button>
+            <a href="index.html" class="btn" style="text-decoration: none; color: var(--text-main); border: 1px solid var(--border);">Về Trang Chủ</a>
+        </div>
+    </header>
+
+    <main class="container">
+        <!-- Bảng điều khiển trạng thái -->
+        <section class="card">
+            <h2 style="margin-bottom: 16px;">Điều Khiển Trạng Thái Phiên</h2>
+            <div style="display: flex; gap: 16px;">
+                <button id="btnToggleVoting" class="btn btn-danger">Đóng Cuộc Bầu Chọn</button>
+            </div>
+        </section>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+            <!-- Phân hệ thêm ứng viên -->
+            <section class="card">
+                <h2 style="font-size: 1.25rem; margin-bottom: 16px;">1. Thêm Ứng Viên / Phương Án</h2>
+                <form id="formAddCandidate">
+                    <div class="form-group">
+                        <label for="candidateName">Họ và tên / Tên phương án</label>
+                        <input type="text" id="candidateName" placeholder="Nhập tên ứng viên..." required>
+                    </div>
+                    <div class="form-group">
+                        <label for="candidateDesc">Mô tả chi tiết</label>
+                        <textarea id="candidateDesc" rows="3" placeholder="Nhập tiểu sử, tóm tắt cương lĩnh..." required></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary" style="width: 100%;">Ghi Lên Smart Contract</button>
+                </form>
+            </section>
+
+            <!-- Phân hệ nạp Whitelist -->
+            <section class="card">
+                <h2 style="font-size: 1.25rem; margin-bottom: 16px;">2. Nạp Cử Tri Hợp Lệ (Whitelist)</h2>
+                <form id="formAddWhitelist">
+                    <div class="form-group">
+                        <label for="whitelistInput">Danh sách địa chỉ ví (Mỗi ví một dòng)</label>
+                        <textarea id="whitelistInput" rows="5" placeholder="0x123...&#10;0x456...&#10;0x789..." style="font-family: monospace;" required></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary" style="width: 100%;">Cấp Quyền Bỏ Phiếu (Batch)</button>
+                </form>
+            </section>
+        </div>
+    </main>
+
+    <script src="js/admin.js"></script>
+</body>
+</html>

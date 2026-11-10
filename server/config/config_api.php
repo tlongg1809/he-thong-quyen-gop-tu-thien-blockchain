@@ -4,11 +4,10 @@ header("Access-Control-Allow-Origin: *");
 header("Content-Type: application/json; charset=UTF-8");
 
 // Kiểm tra file .env trong thư mục server/ trước, nếu không có thì tìm ở thư mục gốc
-$envPath = __DIR__ . '/.env';
+$envPath = dirname(__DIR__) . '/.env';
 if (!file_exists($envPath)) {
-    $envPath = dirname(__DIR__) . '/.env';
+    $envPath = dirname(dirname(__DIR__)) . '/.env';
 }
-
 $contractAddress = null;
 
 if (file_exists($envPath)) {

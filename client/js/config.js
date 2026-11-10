@@ -6,7 +6,7 @@ let CHARITY_CONTRACT_ADDRESS = null;
 // Hàm đọc biến môi trường từ server/.env
 async function loadContractConfig() {
     try {
-        const response = await fetch("../server/config_api.php");
+        const response = await fetch("../server/config/config_api.php");
         if (!response.ok) {
             throw new Error("Không thể kết nối đến API config");
         }

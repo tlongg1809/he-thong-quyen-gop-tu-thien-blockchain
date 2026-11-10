@@ -3,63 +3,83 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Quản Trị Bầu Chọn - Smart Contract Admin</title>
+    <title>CharityChain - Quản Trị & Giải Ngân</title>
     <link rel="stylesheet" href="css/style.css">
-    <script src="js/config.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
 </head>
 <body>
     <header class="navbar">
         <div class="brand">
-            <span>⚙️</span> Ban Tổ Chức (Admin Panel)
+            <span>⚙️</span> CharityChain - Quản Trị
         </div>
         <div class="nav-right">
             <span id="walletAddress" class="wallet-badge"></span>
-            <button id="btnConnect" class="btn btn-primary">Kết Nối Ví Admin</button>
+            <button id="btnConnect" class="btn btn-primary">Kết Nối Ví</button>
             <a href="index.html" class="btn" style="text-decoration: none; color: var(--text-main); border: 1px solid var(--border);">Về Trang Chủ</a>
         </div>
     </header>
 
     <main class="container">
-        <!-- Bảng điều khiển trạng thái -->
-        <section class="card">
-            <h2 style="margin-bottom: 16px;">Điều Khiển Trạng Thái Phiên</h2>
-            <div style="display: flex; gap: 16px;">
-                <button id="btnToggleVoting" class="btn btn-danger">Đóng Cuộc Bầu Chọn</button>
-            </div>
-        </section>
-
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
-            <!-- Phân hệ thêm ứng viên -->
+            <!-- 1. Form Tạo Chiến Dịch (Dành cho Admin) -->
             <section class="card">
-                <h2 style="font-size: 1.25rem; margin-bottom: 16px;">1. Thêm Ứng Viên / Phương Án</h2>
-                <form id="formAddCandidate">
+                <h2 style="font-size: 1.25rem; margin-bottom: 16px;">1. Khởi Tạo Chiến Dịch Mới</h2>
+                <form id="formCreateCampaign">
                     <div class="form-group">
-                        <label for="candidateName">Họ và tên / Tên phương án</label>
-                        <input type="text" id="candidateName" placeholder="Nhập tên ứng viên..." required>
+                        <label for="campaignTitle">Tên chiến dịch</label>
+                        <input type="text" id="campaignTitle" placeholder="Ví dụ: Cứu trợ lũ lụt Miền Trung" required>
                     </div>
                     <div class="form-group">
-                        <label for="candidateDesc">Mô tả chi tiết</label>
-                        <textarea id="candidateDesc" rows="3" placeholder="Nhập tiểu sử, tóm tắt cương lĩnh..." required></textarea>
+                        <label for="campaignDesc">Mô tả hoàn cảnh & mục đích</label>
+                        <textarea id="campaignDesc" rows="3" placeholder="Chi tiết mục đích kêu gọi..." required></textarea>
                     </div>
-                    <button type="submit" class="btn btn-primary" style="width: 100%;">Ghi Lên Smart Contract</button>
+                    <div class="form-group">
+                        <label for="campaignManager">Địa chỉ ví Trưởng ban quản lý</label>
+                        <input type="text" id="campaignManager" placeholder="0x..." required>
+                    </div>
+                    <div class="form-group">
+                        <label for="campaignTarget">Mục tiêu kêu gọi (ETH)</label>
+                        <input type="number" id="campaignTarget" step="0.01" min="0.01" placeholder="Ví dụ: 2.5" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="campaignDays">Thời hạn quyên góp (Số ngày)</label>
+                        <input type="number" id="campaignDays" min="1" placeholder="Ví dụ: 30" required>
+                    </div>
+                    <button type="submit" id="btnSubmitCampaign" class="btn btn-primary" style="width: 100%;">Tạo Chiến Dịch Lên Blockchain</button>
                 </form>
             </section>
 
-            <!-- Phân hệ nạp Whitelist -->
+            <!-- 2. Form Đề Xuất Giải Ngân Minh Bạch (Dành cho Manager) -->
             <section class="card">
-                <h2 style="font-size: 1.25rem; margin-bottom: 16px;">2. Nạp Cử Tri Hợp Lệ (Whitelist)</h2>
-                <form id="formAddWhitelist">
+                <h2 style="font-size: 1.25rem; margin-bottom: 16px;">2. Tạo Đề Xuất Giải Ngân Đợt Tiền</h2>
+                <form id="formRequestDisbursement">
                     <div class="form-group">
-                        <label for="whitelistInput">Danh sách địa chỉ ví (Mỗi ví một dòng)</label>
-                        <textarea id="whitelistInput" rows="5" placeholder="0x123...&#10;0x456...&#10;0x789..." style="font-family: monospace;" required></textarea>
+                        <label for="disburseCampaignId">Mã chiến dịch (Campaign ID)</label>
+                        <input type="number" id="disburseCampaignId" min="0" placeholder="Ví dụ: 0" required>
                     </div>
-                    <button type="submit" class="btn btn-primary" style="width: 100%;">Cấp Quyền Bỏ Phiếu (Batch)</button>
+                    <div class="form-group">
+                        <label for="disbursePurpose">Mục đích chi tiêu cụ thể</label>
+                        <input type="text" id="disbursePurpose" placeholder="Ví dụ: Mua 500 thùng mì & nước ngọt" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="disburseAmount">Số tiền cần rút (ETH)</label>
+                        <input type="number" id="disburseAmount" step="0.001" min="0.0001" placeholder="Ví dụ: 0.5" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="disburseRecipient">Địa chỉ ví đơn vị thụ hưởng / nhà cung cấp</label>
+                        <input type="text" id="disburseRecipient" placeholder="0x..." required>
+                    </div>
+                    <div class="form-group">
+                        <label for="disburseProof">Mã hash hóa đơn/chứng từ (IPFS hoặc link biên lai)</label>
+                        <input type="text" id="disburseProof" placeholder="QmXoypizjW3WknFiJnKLwHCnL72vedxjQkDDP1mXWo6uco" required>
+                    </div>
+                    <button type="submit" id="btnSubmitDisburse" class="btn btn-primary" style="width: 100%;">Gửi Yêu Cầu Giải Ngân</button>
                 </form>
             </section>
         </div>
     </main>
 
+    <script src="js/config.js"></script>
     <script src="js/admin.js"></script>
 </body>
 </html>

@@ -1,85 +1,221 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="vi">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>CharityChain - Quản Trị & Giải Ngân</title>
-    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/style.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
-</head>
-<body>
+  </head>
+  <body>
     <header class="navbar">
-        <div class="brand">
-            <span>⚙️</span> CharityChain - Quản Trị
-        </div>
-        <div class="nav-right">
-            <span id="walletAddress" class="wallet-badge"></span>
-            <button id="btnConnect" class="btn btn-primary">Kết Nối Ví</button>
-            <a href="index.html" class="btn" style="text-decoration: none; color: var(--text-main); border: 1px solid var(--border);">Về Trang Chủ</a>
-        </div>
+      <div class="brand"><span>⚙️</span> CharityChain - Quản Trị</div>
+      <div class="nav-right">
+        <span id="walletAddress" class="wallet-badge"></span>
+        <button id="btnConnect" class="btn btn-primary">
+          Kết Nối Ví MetaMask
+        </button>
+        <a
+          href="index.html"
+          class="btn"
+          style="
+            text-decoration: none;
+            color: var(--text-main);
+            border: 1px solid var(--border);
+          "
+          >Về Trang Chủ</a
+        >
+      </div>
     </header>
 
     <main class="container">
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
-            <!-- 1. Form Tạo Chiến Dịch (Dành cho Admin) -->
-            <section class="card">
-                <h2 style="font-size: 1.25rem; margin-bottom: 16px;">1. Khởi Tạo Chiến Dịch Mới</h2>
-                <form id="formCreateCampaign">
-                    <div class="form-group">
-                        <label for="campaignTitle">Tên chiến dịch</label>
-                        <input type="text" id="campaignTitle" placeholder="Ví dụ: Cứu trợ lũ lụt Miền Trung" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="campaignDesc">Mô tả hoàn cảnh & mục đích</label>
-                        <textarea id="campaignDesc" rows="3" placeholder="Chi tiết mục đích kêu gọi..." required></textarea>
-                    </div>
-                    <div class="form-group">
-                        <label for="campaignManager">Địa chỉ ví Trưởng ban quản lý</label>
-                        <input type="text" id="campaignManager" placeholder="0x..." required>
-                    </div>
-                    <div class="form-group">
-                        <label for="campaignTarget">Mục tiêu kêu gọi (ETH)</label>
-                        <input type="number" id="campaignTarget" step="0.01" min="0.01" placeholder="Ví dụ: 2.5" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="campaignDays">Thời hạn quyên góp (Số ngày)</label>
-                        <input type="number" id="campaignDays" min="1" placeholder="Ví dụ: 30" required>
-                    </div>
-                    <button type="submit" id="btnSubmitCampaign" class="btn btn-primary" style="width: 100%;">Tạo Chiến Dịch Lên Blockchain</button>
-                </form>
-            </section>
+      <div
+        style="
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 24px;
+          margin-bottom: 24px;
+        "
+      >
+        <!-- 1. Form Tạo Chiến Dịch (Dành cho Admin) -->
+        <section class="card">
+          <h2 style="font-size: 1.25rem; margin-bottom: 16px">
+            1. Khởi Tạo Chiến Dịch Mới
+          </h2>
+          <form id="formCreateCampaign">
+            <div class="form-group">
+              <label for="campaignTitle">Tên chiến dịch</label>
+              <input
+                type="text"
+                id="campaignTitle"
+                placeholder="Ví dụ: Cứu trợ lũ lụt Miền Trung"
+                required
+              />
+            </div>
+            <div class="form-group">
+              <label for="campaignDesc">Mô tả hoàn cảnh & mục đích</label>
+              <textarea
+                id="campaignDesc"
+                rows="3"
+                placeholder="Chi tiết mục đích kêu gọi..."
+                required
+              ></textarea>
+            </div>
+            <div class="form-group">
+              <label for="campaignManager">Địa chỉ ví Trưởng ban quản lý</label>
+              <input
+                type="text"
+                id="campaignManager"
+                placeholder="0x..."
+                required
+              />
+            </div>
+            <div class="form-group">
+              <label for="campaignTarget">Mục tiêu kêu gọi (ETH)</label>
+              <input
+                type="number"
+                id="campaignTarget"
+                step="0.01"
+                min="0.01"
+                placeholder="Ví dụ: 2.5"
+                required
+              />
+            </div>
+            <div class="form-group">
+              <label for="campaignDays">Thời hạn quyên góp (Số ngày)</label>
+              <input
+                type="number"
+                id="campaignDays"
+                min="1"
+                placeholder="Ví dụ: 30"
+                required
+              />
+            </div>
+            <button
+              type="submit"
+              id="btnSubmitCampaign"
+              class="btn btn-primary"
+              style="width: 100%"
+            >
+              Tạo Chiến Dịch Lên Blockchain
+            </button>
+          </form>
+        </section>
 
-            <!-- 2. Form Đề Xuất Giải Ngân Minh Bạch (Dành cho Manager) -->
-            <section class="card">
-                <h2 style="font-size: 1.25rem; margin-bottom: 16px;">2. Tạo Đề Xuất Giải Ngân Đợt Tiền</h2>
-                <form id="formRequestDisbursement">
-                    <div class="form-group">
-                        <label for="disburseCampaignId">Mã chiến dịch (Campaign ID)</label>
-                        <input type="number" id="disburseCampaignId" min="0" placeholder="Ví dụ: 0" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="disbursePurpose">Mục đích chi tiêu cụ thể</label>
-                        <input type="text" id="disbursePurpose" placeholder="Ví dụ: Mua 500 thùng mì & nước ngọt" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="disburseAmount">Số tiền cần rút (ETH)</label>
-                        <input type="number" id="disburseAmount" step="0.001" min="0.0001" placeholder="Ví dụ: 0.5" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="disburseRecipient">Địa chỉ ví đơn vị thụ hưởng / nhà cung cấp</label>
-                        <input type="text" id="disburseRecipient" placeholder="0x..." required>
-                    </div>
-                    <div class="form-group">
-                        <label for="disburseProof">Mã hash hóa đơn/chứng từ (IPFS hoặc link biên lai)</label>
-                        <input type="text" id="disburseProof" placeholder="QmXoypizjW3WknFiJnKLwHCnL72vedxjQkDDP1mXWo6uco" required>
-                    </div>
-                    <button type="submit" id="btnSubmitDisburse" class="btn btn-primary" style="width: 100%;">Gửi Yêu Cầu Giải Ngân</button>
-                </form>
-            </section>
-        </div>
+        <!-- 2. Form Đề Xuất Giải Ngân Minh Bạch (Dành cho Manager) -->
+        <section class="card">
+          <h2 style="font-size: 1.25rem; margin-bottom: 16px">
+            2. Tạo Đề Xuất Giải Ngân Đợt Tiền
+          </h2>
+          <form id="formRequestDisbursement">
+            <div class="form-group">
+              <label for="disburseCampaignId"
+                >Mã chiến dịch (Campaign ID)</label
+              >
+              <input
+                type="number"
+                id="disburseCampaignId"
+                min="0"
+                placeholder="Ví dụ: 0"
+                required
+              />
+            </div>
+            <div class="form-group">
+              <label for="disbursePurpose">Mục đích chi tiêu cụ thể</label>
+              <input
+                type="text"
+                id="disbursePurpose"
+                placeholder="Ví dụ: Mua 500 thùng mì & nước ngọt"
+                required
+              />
+            </div>
+            <div class="form-group">
+              <label for="disburseAmount">Số tiền cần rút (ETH)</label>
+              <input
+                type="number"
+                id="disburseAmount"
+                step="0.001"
+                min="0.0001"
+                placeholder="Ví dụ: 0.5"
+                required
+              />
+            </div>
+            <div class="form-group">
+              <label for="disburseRecipient"
+                >Địa chỉ ví đơn vị thụ hưởng / nhà cung cấp</label
+              >
+              <input
+                type="text"
+                id="disburseRecipient"
+                placeholder="0x..."
+                required
+              />
+            </div>
+            <div class="form-group">
+              <label for="disburseProof"
+                >Mã hash hóa đơn/chứng từ (IPFS hoặc link biên lai)</label
+              >
+              <input
+                type="text"
+                id="disburseProof"
+                placeholder="QmXoypizjW3WknFiJnKLwHCnL72vedxjQkDDP1mXWo6uco"
+                required
+              />
+            </div>
+            <button
+              type="submit"
+              id="btnSubmitDisburse"
+              class="btn btn-primary"
+              style="width: 100%"
+            >
+              Gửi Yêu Cầu Giải Ngân
+            </button>
+          </form>
+        </section>
+      </div>
+
+      <!-- 3. Form Thực Thi Giải Ngân (Duyệt chuyển tiền thực tế qua Smart Contract) -->
+      <section class="card">
+        <h2 style="font-size: 1.25rem; margin-bottom: 16px">
+          3. Phê Duyệt & Thực Thi Giải Ngân Quỹ
+        </h2>
+        <form
+          id="formExecuteDisbursement"
+          style="display: flex; gap: 16px; align-items: flex-end"
+        >
+          <div class="form-group" style="flex: 1; margin-bottom: 0">
+            <label for="execCampaignId">Mã chiến dịch (Campaign ID)</label>
+            <input
+              type="number"
+              id="execCampaignId"
+              min="0"
+              placeholder="Ví dụ: 0"
+              required
+            />
+          </div>
+          <div class="form-group" style="flex: 1; margin-bottom: 0">
+            <label for="execRequestId">Mã yêu cầu giải ngân (Request ID)</label>
+            <input
+              type="number"
+              id="execRequestId"
+              min="0"
+              placeholder="Ví dụ: 0"
+              required
+            />
+          </div>
+          <button
+            type="submit"
+            id="btnSubmitExec"
+            class="btn btn-primary"
+            style="height: 42px; padding: 0 24px"
+          >
+            Thực Thi Chuyển Tiền
+          </button>
+        </form>
+      </section>
     </main>
 
     <script src="js/config.js"></script>
     <script src="js/admin.js"></script>
-</body>
+  </body>
 </html>

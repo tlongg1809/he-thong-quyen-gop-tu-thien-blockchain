@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CharityChain - Tra Cứu Sao Kê Minh Bạch</title>
+    <link rel="stylesheet" href="css/style.css" />
+    <!-- Ethers.js v6 CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
+  </head>
+  <body>
+    <header class="navbar">
+      <div class="brand"><span>📊</span> CharityChain - Sao Kê</div>
+      <div class="nav-right">
+        <span
+          id="walletAddress"
+          class="wallet-badge"
+          style="display: none"
+        ></span>
+        <button id="btnConnect" class="btn btn-primary">
+          Kết Nối Ví MetaMask
+        </button>
+        <a
+          href="index.html"
+          class="btn"
+          style="
+            text-decoration: none;
+            color: var(--text-main);
+            border: 1px solid var(--border);
+          "
+          >Về Trang Chủ</a
+        >
+      </div>
+    </header>
+
+    <main class="container">
+      <!-- Phần chọn chiến dịch để tra cứu -->
+      <section class="card" style="margin-bottom: 24px">
+        <h2 style="font-size: 1.25rem; margin-bottom: 12px">
+          Chọn Chiến Dịch Cần Tra Cứu Sao Kê
+        </h2>
+        <div style="display: flex; gap: 12px">
+          <select
+            id="selectCampaign"
+            class="form-group"
+            style="
+              flex: 1;
+              padding: 10px;
+              border-radius: 6px;
+              border: 1px solid var(--border);
+            "
+          >
+            <option value="">
+              -- Đang tải danh sách chiến dịch từ Blockchain... --
+            </option>
+          </select>
+          <button id="btnLoadAudit" class="btn btn-primary">Xem Sao Kê</button>
+        </div>
+      </section>
+
+      <!-- Thông tin tổng quan chiến dịch -->
+      <section
+        id="campaignOverview"
+        class="card"
+        style="
+          margin-bottom: 24px;
+          display: none;
+          background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
+        "
+      >
+        <h3 id="infoTitle" style="color: var(--primary); margin-bottom: 8px">
+          -
+        </h3>
+        <p
+          id="infoDesc"
+          style="
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            margin-bottom: 12px;
+          "
+        ></p>
+        <div style="display: flex; gap: 24px; font-size: 0.95rem">
+          <div>
+            💰 Đã quyên góp: <strong id="infoRaised">0 ETH</strong> / Mục tiêu:
+            <strong id="infoTarget">0 ETH</strong>
+          </div>
+          <div>📤 Đã giải ngân: <strong id="infoDisbursed">0 ETH</strong></div>
+          <div>
+            📌 Trạng thái: <span id="infoStatus" class="badge-status">--</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Bảng 1: Lịch sử Quyên Góp (Donations) -->
+      <section class="card" style="margin-bottom: 24px">
+        <h3 style="font-size: 1.15rem; margin-bottom: 16px">
+          1. Danh Sách Mạnh Thường Quân Đóng Góp (On-chain)
+        </h3>
+        <div style="overflow-x: auto">
+          <table
+            style="
+              width: 100%;
+              border-collapse: collapse;
+              text-align: left;
+              font-size: 0.9rem;
+            "
+          >
+            <thead>
+              <tr
+                style="
+                  border-bottom: 2px solid var(--border);
+                  color: var(--text-muted);
+                "
+              >
+                <th style="padding: 10px">Địa Chỉ Ví Người Gửi</th>
+                <th style="padding: 10px">Số Tiền (ETH)</th>
+                <th style="padding: 10px">Lời Nhắn Gửi Gắm</th>
+                <th style="padding: 10px">Thời Gian</th>
+              </tr>
+            </thead>
+            <tbody id="donationTableBody">
+              <tr>
+                <td
+                  colspan="4"
+                  style="
+                    padding: 16px;
+                    text-align: center;
+                    color: var(--text-muted);
+                  "
+                >
+                  Vui lòng chọn chiến dịch và bấm "Xem Sao Kê".
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Bảng 2: Lịch sử Giải Ngân (Disbursements) -->
+      <section class="card">
+        <h3 style="font-size: 1.15rem; margin-bottom: 16px">
+          2. Lịch Sử Giải Ngân & Chứng Từ (On-chain)
+        </h3>
+        <div style="overflow-x: auto">
+          <table
+            style="
+              width: 100%;
+              border-collapse: collapse;
+              text-align: left;
+              font-size: 0.9rem;
+            "
+          >
+            <thead>
+              <tr
+                style="
+                  border-bottom: 2px solid var(--border);
+                  color: var(--text-muted);
+                "
+              >
+                <th style="padding: 10px">ID</th>
+                <th style="padding: 10px">Mục Đích Chi Tiêu</th>
+                <th style="padding: 10px">Số Tiền Rút</th>
+                <th style="padding: 10px">Ví Thụ Hưởng</th>
+                <th style="padding: 10px">Mã Chứng Từ (Proof)</th>
+                <th style="padding: 10px">Trạng Thái</th>
+              </tr>
+            </thead>
+            <tbody id="disburseTableBody">
+              <tr>
+                <td
+                  colspan="6"
+                  style="
+                    padding: 16px;
+                    text-align: center;
+                    color: var(--text-muted);
+                  "
+                >
+                  Chưa có dữ liệu giải ngân.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <!-- Nạp cấu hình và kịch bản -->
+    <script src="js/config.js"></script>
+    <script src="js/audit.js"></script>
+  </body>
+</html>

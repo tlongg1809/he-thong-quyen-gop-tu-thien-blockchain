@@ -1,74 +1,311 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="vi">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>CharityChain - Quyên Góp Từ Thiện Minh Bạch</title>
-    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/style.css" />
     <!-- Ethers.js v6 CDN -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
-</head>
-<body>
+    <style>
+      /* Tinh chỉnh bổ sung cho giao diện đẹp và hiện đại hơn */
+      .hero-banner {
+        background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+        color: white;
+        border-radius: 16px;
+        padding: 40px;
+        margin-bottom: 32px;
+        box-shadow: 0 10px 25px -5px rgba(59, 130, 246, 0.3);
+      }
+      .hero-banner h1 {
+        color: white !important;
+        font-size: 2rem;
+        font-weight: 700;
+        margin-bottom: 12px;
+      }
+      .hero-banner p {
+        color: #e2e8f0 !important;
+        font-size: 1.05rem;
+        max-width: 700px;
+        line-height: 1.6;
+      }
+      .campaign-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+        gap: 24px;
+      }
+      .campaign-card {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 24px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        transition:
+          transform 0.2s ease,
+          box-shadow 0.2s ease;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+      }
+      .campaign-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 12px 20px -5px rgba(0, 0, 0, 0.1);
+      }
+      .progress-container {
+        background: #f1f5f9;
+        border-radius: 9999px;
+        height: 10px;
+        overflow: hidden;
+        margin: 12px 0 8px 0;
+      }
+      .progress-bar {
+        background: linear-gradient(90deg, #3b82f6 0%, #10b981 100%);
+        height: 100%;
+        border-radius: 9999px;
+        transition: width 0.4s ease;
+      }
+      .modal-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(15, 23, 42, 0.6);
+        backdrop-filter: blur(4px);
+        z-index: 1000;
+        align-items: center;
+        justify-content: center;
+      }
+    </style>
+  </head>
+  <body>
     <header class="navbar">
-        <div class="brand">
-            <span>❤️</span> CharityChain DApp
-        </div>
-        <div class="nav-right">
-            <span id="walletAddress" class="wallet-badge"></span>
-            <button id="btnConnect" class="btn btn-primary">Kết Nối Ví MetaMask</button>
-            <a href="audit.html" class="btn" style="text-decoration: none; border: 1px solid var(--border); color: var(--text-main);">Tra Cứu Sao Kê</a>
-        </div>
+      <div
+        class="brand"
+        style="
+          font-size: 1.25rem;
+          font-weight: 700;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        "
+      >
+        <span style="font-size: 1.5rem">❤️</span> CharityChain DApp
+      </div>
+      <div
+        class="nav-right"
+        style="display: flex; align-items: center; gap: 12px"
+      >
+        <span
+          id="walletAddress"
+          class="wallet-badge"
+          style="display: none"
+        ></span>
+        <button id="btnConnect" class="btn btn-primary">
+          Kết Nối Ví MetaMask
+        </button>
+        <a
+          href="audit.html"
+          class="btn"
+          style="
+            text-decoration: none;
+            border: 1px solid var(--border);
+            color: var(--text-main);
+            font-weight: 500;
+          "
+          >📊 Tra Cứu Sao Kê</a
+        >
+        <a
+          href="admin.html"
+          class="btn"
+          style="
+            text-decoration: none;
+            border: 1px solid var(--border);
+            color: var(--text-main);
+            font-weight: 500;
+          "
+          >⚙️ Quản Trị</a
+        >
+      </div>
     </header>
 
-    <main class="container">
-        <!-- Banner giới thiệu -->
-        <section class="card" style="background: linear-gradient(135deg, #eff6ff 0%, #ffffff 100%);">
-            <h1 style="font-size: 1.6rem; color: var(--primary); margin-bottom: 8px;">Nền Tảng Quyên Góp Minh Bạch Bằng Smart Contract</h1>
-            <p style="color: var(--text-muted);">
-                Tất cả các khoản tiền đóng góp và tiến trình giải ngân đều được lưu trữ bất biến trên Blockchain.
-            </p>
-        </section>
+    <main class="container" style="padding-top: 32px; padding-bottom: 48px">
+      <!-- Banner giới thiệu -->
+      <section class="hero-banner">
+        <h1>Nền Tảng Quyên Góp Từ Thiện Minh Bạch</h1>
+        <p>
+          Toàn bộ quỹ đóng góp và tiến trình giải ngân được bảo vệ bằng công
+          nghệ Smart Contract trên mạng lưới Blockchain Sepolia. Cam kết minh
+          bạch tuyệt đối, chống gian lận và sai lệch lịch sử.
+        </p>
+      </section>
 
-        <!-- Danh sách chiến dịch -->
-        <section>
-            <h2 style="font-size: 1.3rem; margin-bottom: 20px;">Các Chiến Dịch Đang Kêu Gọi</h2>
-            <div id="campaignsContainer" class="grid">
-                <p id="loadingText">Đang tải danh sách chiến dịch từ Smart Contract...</p>
-            </div>
-        </section>
-
-        <!-- Modal Popup Form Quyên Góp -->
-        <div id="donateModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 100; align-items: center; justify-content: center;">
-            <div class="card" style="width: 100%; max-width: 480px; margin: 0 16px;">
-                <h3 id="modalCampaignTitle" style="margin-bottom: 16px;">Ủng Hộ Chiến Dịch</h3>
-                <form id="formDonate">
-                    <input type="hidden" id="modalCampaignId">
-                    <div class="form-group">
-                        <label for="donateAmount">Số tiền quyên góp (ETH)</label>
-                        <input type="number" id="donateAmount" step="0.001" min="0.0001" placeholder="Ví dụ: 0.01" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="donateMessage">Lời nhắn gửi gắm</label>
-                        <input type="text" id="donateMessage" placeholder="Chúc bà con sớm vượt qua khó khăn..." required>
-                    </div>
-                    <div style="display: flex; gap: 12px; margin-top: 20px;">
-                        <button type="button" class="btn" style="flex: 1; border: 1px solid var(--border);" onclick="closeDonateModal()">Hủy</button>
-                        <button type="submit" id="btnSubmitDonate" class="btn btn-primary" style="flex: 1;">Xác Nhận Ký Ví</button>
-                    </div>
-                </form>
-            </div>
+      <!-- Danh sách chiến dịch -->
+      <section>
+        <div
+          style="
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+          "
+        >
+          <h2 style="font-size: 1.4rem; font-weight: 700; color: #1e293b">
+            Các Chiến Dịch Đang Kêu Gọi
+          </h2>
         </div>
+        <div id="campaignsContainer" class="campaign-grid">
+          <p
+            id="loadingText"
+            style="
+              color: var(--text-muted);
+              grid-column: 1 / -1;
+              text-align: center;
+              padding: 40px;
+            "
+          >
+            Đang tải danh sách chiến dịch từ Smart Contract...
+          </p>
+        </div>
+      </section>
 
-        <!-- Thông báo biên lai giao dịch TxHash -->
-        <section id="txReceiptCard" class="card" style="margin-top: 32px; display: none;">
-            <h3 style="color: var(--success); margin-bottom: 8px;">✅ Quyên góp thành công!</h3>
-            <p style="font-size: 0.9rem; margin-bottom: 8px;">Mã bằng chứng giao dịch (TxProof) đã được ghi vào sổ cái Smart Contract:</p>
-            <p id="txHashDisplay" style="font-family: monospace; background: #f1f5f9; padding: 12px; border-radius: 6px; word-break: break-all;"></p>
-        </section>
+      <!-- Modal Popup Form Quyên Góp -->
+      <div id="donateModal" class="modal-overlay">
+        <div
+          class="card"
+          style="
+            width: 100%;
+            max-width: 480px;
+            margin: 0 16px;
+            background: white;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+          "
+        >
+          <h3
+            id="modalCampaignTitle"
+            style="
+              margin-bottom: 16px;
+              font-size: 1.2rem;
+              font-weight: 700;
+              color: #1e293b;
+            "
+          >
+            Ủng Hộ Chiến Dịch
+          </h3>
+          <form id="formDonate">
+            <input type="hidden" id="modalCampaignId" />
+            <div class="form-group">
+              <label
+                for="donateAmount"
+                style="font-weight: 500; margin-bottom: 6px; display: block"
+                >Số tiền quyên góp (ETH)</label
+              >
+              <input
+                type="number"
+                id="donateAmount"
+                step="0.001"
+                min="0.0001"
+                placeholder="Ví dụ: 0.01"
+                required
+                style="
+                  width: 100%;
+                  padding: 10px;
+                  border: 1px solid var(--border);
+                  border-radius: 6px;
+                "
+              />
+            </div>
+            <div class="form-group" style="margin-top: 16px">
+              <label
+                for="donateMessage"
+                style="font-weight: 500; margin-bottom: 6px; display: block"
+                >Lời nhắn gửi gắm</label
+              >
+              <input
+                type="text"
+                id="donateMessage"
+                placeholder="Chúc bà con sớm vượt qua khó khăn..."
+                required
+                style="
+                  width: 100%;
+                  padding: 10px;
+                  border: 1px solid var(--border);
+                  border-radius: 6px;
+                "
+              />
+            </div>
+            <div style="display: flex; gap: 12px; margin-top: 24px">
+              <button
+                type="button"
+                class="btn"
+                style="
+                  flex: 1;
+                  border: 1px solid var(--border);
+                  background: #f8fafc;
+                "
+                onclick="closeDonateModal()"
+              >
+                Hủy
+              </button>
+              <button
+                type="submit"
+                id="btnSubmitDonate"
+                class="btn btn-primary"
+                style="flex: 1"
+              >
+                Xác Nhận Ký Ví
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Thông báo biên lai giao dịch TxHash -->
+      <section
+        id="txReceiptCard"
+        class="card"
+        style="margin-top: 32px; display: none; border-left: 4px solid #10b981"
+      >
+        <h3
+          style="
+            color: #10b981;
+            margin-bottom: 8px;
+            font-size: 1.1rem;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+          "
+        >
+          ✅ Quyên góp thành công!
+        </h3>
+        <p
+          style="
+            font-size: 0.9rem;
+            margin-bottom: 8px;
+            color: var(--text-muted);
+          "
+        >
+          Mã bằng chứng giao dịch (TxProof) đã được ghi nhận trên sổ cái Smart
+          Contract:
+        </p>
+        <p
+          id="txHashDisplay"
+          style="
+            font-family: monospace;
+            background: #f1f5f9;
+            padding: 12px;
+            border-radius: 6px;
+            word-break: break-all;
+            font-size: 0.85rem;
+            color: #334155;
+          "
+        ></p>
+      </section>
     </main>
 
     <!-- Nạp file cấu hình và kịch bản -->
     <script src="js/config.js"></script>
     <script src="js/donate.js"></script>
-</body>
+  </body>
 </html>

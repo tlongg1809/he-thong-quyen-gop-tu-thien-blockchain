@@ -99,29 +99,115 @@ async function handleAccountConnected(account) {
     btnConnect.style.color = "#334155";
     btnConnect.disabled = true;
   }
+
+  // Phân biệt vai trò Admin và Người dùng thường dựa trên địa chỉ ví on-chain
+  try {
+    const adminAddress = await contract.systemAdmin();
+    const isAdmin = account.toLowerCase() === adminAddress.toLowerCase();
+
+    let roleBadge = document.getElementById("adminRoleBadge");
+    if (!roleBadge) {
+      roleBadge = document.createElement("span");
+      roleBadge.id = "adminRoleBadge";
+      roleBadge.style.padding = "6px 12px";
+      roleBadge.style.borderRadius = "6px";
+      roleBadge.style.fontSize = "0.85rem";
+      roleBadge.style.fontWeight = "600";
+      walletAddress?.parentNode?.insertBefore(roleBadge, btnConnect);
+    }
+
+    if (isAdmin) {
+      roleBadge.style.background = "#dcfce7";
+      roleBadge.style.color = "#166534";
+      roleBadge.innerText = "👑 Quản Trị Viên (Admin)";
+    } else {
+      roleBadge.style.background = "#fee2e2";
+      roleBadge.style.color = "#991b1b";
+      roleBadge.innerText = "👤 Ví Thường (Không phải Admin)";
+      console.warn("Ví hiện tại không phải Admin của hợp đồng. Địa chỉ Admin là:", adminAddress);
+    }
+  } catch (e) {
+    console.warn("Không thể kiểm tra quyền Admin:", e);
+  }
+}
+
+// Kiểm tra hoặc tự động chuyển mạng Sepolia
+async function checkOrSwitchSepolia() {
+  if (!window.ethereum) return;
+  try {
+    const chainId = await window.ethereum.request({ method: "eth_chainId" });
+    if (chainId !== "0xaa36a7") {
+      try {
+        await window.ethereum.request({
+          method: "wallet_switchEthereumChain",
+          params: [{ chainId: "0xaa36a7" }],
+        });
+      } catch (switchError) {
+        if (switchError.code === 4902) {
+          await window.ethereum.request({
+            method: "wallet_addEthereumChain",
+            params: [
+              {
+                chainId: "0xaa36a7",
+                chainName: "Sepolia Test Network",
+                nativeCurrency: {
+                  name: "SepoliaETH",
+                  symbol: "ETH",
+                  decimals: 18,
+                },
+                rpcUrls: ["https://ethereum-sepolia-rpc.publicnode.com"],
+                blockExplorerUrls: ["https://sepolia.etherscan.io"],
+              },
+            ],
+          });
+        }
+      }
+    }
+  } catch (e) {
+    console.warn("Không thể kiểm tra/chuyển mạng Sepolia:", e);
+  }
 }
 
 /**
  * Sự kiện bấm nút Kết nối ví
  */
-if (btnConnect) {
-  btnConnect.addEventListener("click", async () => {
-    if (!window.ethereum) {
-      alert("MetaMask chưa được cài đặt!");
-      return;
+async function connectWallet() {
+  if (!window.ethereum) {
+    if (window.location.protocol === "file:") {
+      alert(
+        "Lỗi: Bạn đang mở trang bằng đường dẫn file:// trực tiếp.\nMetaMask bị trình duyệt chặn không cho tương tác trên file://.\n\nVui lòng khởi động Apache trong XAMPP và truy cập qua:\nhttp://localhost/he-thong-quyen-gop-tu-thien-blockchain/client/admin.html",
+      );
+    } else {
+      alert("Vui lòng cài đặt tiện ích mở rộng MetaMask trên trình duyệt (https://metamask.io)!");
     }
-    try {
-      const accounts = await window.ethereum.request({
-        method: "eth_requestAccounts",
-      });
-      if (accounts.length > 0) {
-        await handleAccountConnected(accounts[0]);
-      }
-    } catch (err) {
-      console.error("Lỗi kết nối ví:", err);
+    return;
+  }
+  try {
+    const accounts = await window.ethereum.request({
+      method: "eth_requestAccounts",
+    });
+    if (accounts.length > 0) {
+      await handleAccountConnected(accounts[0]);
+      await checkOrSwitchSepolia();
+    }
+  } catch (err) {
+    console.error("Lỗi kết nối ví:", err);
+    if (err.code === 4001) {
+      alert("Bạn đã hủy/từ chối yêu cầu kết nối ví MetaMask.");
+    } else if (err.code === -32002) {
+      alert(
+        "Yêu cầu kết nối đang chờ xử lý!\n\nVui lòng bấm vào biểu tượng con cáo MetaMask ở góc trên bên phải trình duyệt để mở cửa sổ xác nhận.",
+      );
+    } else {
       alert("Không thể kết nối ví MetaMask: " + (err.message || err));
     }
-  });
+  }
+}
+
+window.connectWallet = connectWallet;
+
+if (btnConnect) {
+  btnConnect.addEventListener("click", connectWallet);
 }
 
 /**

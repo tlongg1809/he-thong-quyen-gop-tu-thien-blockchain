@@ -1,24 +1,23 @@
 // client/js/config.js
 
-// Khởi tạo biến rỗng, giá trị sẽ lấy hoàn toàn từ file .env qua server
-let CHARITY_CONTRACT_ADDRESS = null;
+// Giá trị mặc định từ .env (phòng trường hợp fetch API backend bị lỗi hoặc chạy không qua PHP server)
+let CHARITY_CONTRACT_ADDRESS = "0x05d4FFAB7ec39122EE18BEEA4304D50d61191b45";
+let CONTRACT_ADDRESS = CHARITY_CONTRACT_ADDRESS;
 
 // Hàm đọc biến môi trường từ server/.env
 async function loadContractConfig() {
     try {
         const response = await fetch("../server/config/config_api.php");
-        if (!response.ok) {
-            throw new Error("Không thể kết nối đến API config");
-        }
-        const data = await response.json();
-        if (data.contractAddress && data.contractAddress.startsWith("0x")) {
-            CHARITY_CONTRACT_ADDRESS = data.contractAddress;
-            console.log("Đã tải CONTRACT_ADDRESS từ .env:", CHARITY_CONTRACT_ADDRESS);
-        } else {
-            console.error("Biến CONTRACT_ADDRESS trong .env không hợp lệ!");
+        if (response.ok) {
+            const data = await response.json();
+            if (data.contractAddress && data.contractAddress.startsWith("0x")) {
+                CHARITY_CONTRACT_ADDRESS = data.contractAddress;
+                CONTRACT_ADDRESS = data.contractAddress;
+                console.log("Đã tải CONTRACT_ADDRESS từ .env:", CHARITY_CONTRACT_ADDRESS);
+            }
         }
     } catch (e) {
-        console.error("Lỗi khi đọc file .env từ backend:", e);
+        console.warn("Dùng CONTRACT_ADDRESS mặc định do không gọi được config_api.php:", CHARITY_CONTRACT_ADDRESS, e);
     }
 }
 
@@ -174,3 +173,5 @@ const CHARITY_CONTRACT_ABI = [
     "type": "function"
   }
 ];
+
+const CONTRACT_ABI = CHARITY_CONTRACT_ABI;

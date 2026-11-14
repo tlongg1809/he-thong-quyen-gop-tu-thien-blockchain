@@ -14,64 +14,74 @@ const formDonate = document.getElementById("formDonate");
 const txReceiptCard = document.getElementById("txReceiptCard");
 const txHashDisplay = document.getElementById("txHashDisplay");
 
+// Public Sepolia RPC để luôn đọc được dữ liệu chiến dịch dù ví đang ở mạng nào hoặc chưa kết nối ví
+const SEPOLIA_PUBLIC_RPC = "https://ethereum-sepolia-rpc.publicnode.com";
+const readProvider = new ethers.JsonRpcProvider(SEPOLIA_PUBLIC_RPC);
+
 async function init() {
     // 1. Tải địa chỉ contract từ .env trước
     await loadContractConfig();
 
-    if (!CHARITY_CONTRACT_ADDRESS) {
-        alert("Chưa cấu hình CONTRACT_ADDRESS trong file .env!");
-        return;
-    }
+    // 2. Luôn tải danh sách chiến dịch bằng Public Sepolia RPC
+    await loadCampaigns();
 
-    // 2. Tiếp tục khởi tạo Web3 như bình thường
+    // 3. Khởi tạo Web3 / MetaMask nếu có sẵn
     if (window.ethereum) {
         provider = new ethers.BrowserProvider(window.ethereum);
-        const accounts = await provider.send("eth_accounts", []);
-        if (accounts.length > 0) {
-            await setupUser(accounts[0]);
-        } else {
-            contract = new ethers.Contract(CHARITY_CONTRACT_ADDRESS, CHARITY_CONTRACT_ABI, provider);
-            await loadCampaigns();
+        try {
+            const accounts = await provider.send("eth_accounts", []);
+            if (accounts.length > 0) {
+                await setupUser(accounts[0]);
+            }
+        } catch (e) {
+            console.warn("Lỗi kiểm tra ví đã kết nối:", e);
         }
 
         window.ethereum.on("accountsChanged", (accs) => {
             if (accs.length > 0) setupUser(accs[0]);
             else location.reload();
         });
-    } else {
-        alert("Vui lòng cài đặt MetaMask để tương tác với DApp!");
+
+        window.ethereum.on("chainChanged", () => {
+            location.reload();
+        });
     }
 }
 
 async function setupUser(account) {
     userAddress = account;
-    signer = await provider.getSigner();
-    contract = new ethers.Contract(CHARITY_CONTRACT_ADDRESS, CHARITY_CONTRACT_ABI, signer);
+    if (provider) {
+        signer = await provider.getSigner();
+        contract = new ethers.Contract(CHARITY_CONTRACT_ADDRESS, CHARITY_CONTRACT_ABI, signer);
+    }
 
-    walletAddress.innerText = account.substring(0, 6) + "..." + account.substring(38);
-    walletAddress.style.display = "inline-block";
-    btnConnect.style.display = "none";
-
-    await loadCampaigns();
+    if (walletAddress) {
+        walletAddress.innerText = account.substring(0, 6) + "..." + account.substring(account.length - 4);
+        walletAddress.style.display = "inline-block";
+    }
+    if (btnConnect) {
+        btnConnect.style.display = "none";
+    }
 }
 
 async function loadCampaigns() {
     try {
-        const count = await contract.campaignCount();
+        const readContract = new ethers.Contract(CHARITY_CONTRACT_ADDRESS, CHARITY_CONTRACT_ABI, readProvider);
+        const count = await readContract.campaignCount();
         campaignsContainer.innerHTML = "";
 
         if (Number(count) === 0) {
-            campaignsContainer.innerHTML = "<p>Hiện tại chưa có chiến dịch nào được khởi tạo.</p>";
+            campaignsContainer.innerHTML = "<p style='color: var(--text-muted); grid-column: 1 / -1; text-align: center; padding: 32px;'>Hiện tại chưa có chiến dịch nào được khởi tạo trên Smart Contract.</p>";
             return;
         }
 
         for (let i = 0; i < count; i++) {
-            const c = await contract.campaigns(i);
+            const c = await readContract.campaigns(i);
             renderCampaignCard(c);
         }
     } catch (err) {
         console.error("Lỗi tải chiến dịch:", err);
-        campaignsContainer.innerHTML = "<p style='color: var(--danger);'>Không thể tải dữ liệu từ Smart Contract. Vui lòng kiểm tra địa chỉ hợp đồng và mạng ví.</p>";
+        campaignsContainer.innerHTML = "<p style='color: var(--danger); grid-column: 1 / -1; text-align: center; padding: 24px;'>Không thể tải dữ liệu từ Smart Contract. Vui lòng kiểm tra kết nối mạng Internet hoặc RPC Sepolia.</p>";
     }
 }
 
@@ -142,11 +152,21 @@ formDonate.addEventListener("submit", async (e) => {
         btnSubmit.disabled = true;
         btnSubmit.innerText = "Đang xác thực...";
 
+        // Đảm bảo ví đang ở mạng Sepolia
+        await checkOrSwitchSepolia();
+        if (!provider) {
+            provider = new ethers.BrowserProvider(window.ethereum);
+        }
+        if (!signer) {
+            signer = await provider.getSigner();
+        }
+        const writeContract = new ethers.Contract(CHARITY_CONTRACT_ADDRESS, CHARITY_CONTRACT_ABI, signer);
+
         // Chuyển ETH sang Wei
         const amountWei = ethers.parseEther(amountEth);
 
         // Gọi hàm donate trên Smart Contract kèm giá trị coin
-        const tx = await contract.donate(id, message, { value: amountWei });
+        const tx = await writeContract.donate(id, message, { value: amountWei });
         
         closeDonateModal();
         txReceiptCard.style.display = "block";
@@ -165,11 +185,66 @@ formDonate.addEventListener("submit", async (e) => {
     }
 });
 
-btnConnect?.addEventListener("click", async () => {
-    if (window.ethereum) {
-        const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
-        await setupUser(accounts[0]);
+// Kiểm tra hoặc tự động chuyển mạng Sepolia
+async function checkOrSwitchSepolia() {
+    if (!window.ethereum) return;
+    try {
+        const chainId = await window.ethereum.request({ method: "eth_chainId" });
+        if (chainId !== "0xaa36a7") {
+            try {
+                await window.ethereum.request({
+                    method: "wallet_switchEthereumChain",
+                    params: [{ chainId: "0xaa36a7" }]
+                });
+            } catch (switchError) {
+                if (switchError.code === 4902) {
+                    await window.ethereum.request({
+                        method: "wallet_addEthereumChain",
+                        params: [{
+                            chainId: "0xaa36a7",
+                            chainName: "Sepolia Test Network",
+                            nativeCurrency: { name: "SepoliaETH", symbol: "ETH", decimals: 18 },
+                            rpcUrls: ["https://ethereum-sepolia-rpc.publicnode.com"],
+                            blockExplorerUrls: ["https://sepolia.etherscan.io"]
+                        }]
+                    });
+                }
+            }
+        }
+    } catch (e) {
+        console.warn("Không thể kiểm tra/chuyển mạng Sepolia:", e);
     }
-});
+}
+
+async function connectWallet() {
+    if (!window.ethereum) {
+        if (window.location.protocol === "file:") {
+            alert("Lỗi: Bạn đang mở trang bằng đường dẫn file:// trực tiếp.\nMetaMask bị trình duyệt chặn không cho tương tác trên file://.\n\nVui lòng khởi động Apache trong XAMPP và truy cập qua:\nhttp://localhost/he-thong-quyen-gop-tu-thien-blockchain/client/index.html");
+        } else {
+            alert("Vui lòng cài đặt tiện ích mở rộng MetaMask trên trình duyệt (https://metamask.io)!");
+        }
+        return;
+    }
+    try {
+        const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+        if (accounts && accounts.length > 0) {
+            await setupUser(accounts[0]);
+            await checkOrSwitchSepolia();
+        }
+    } catch (err) {
+        console.error("Lỗi kết nối ví:", err);
+        if (err.code === 4001) {
+            alert("Bạn đã hủy/từ chối yêu cầu kết nối ví MetaMask.");
+        } else if (err.code === -32002) {
+            alert("Yêu cầu kết nối đang chờ xử lý!\n\nVui lòng bấm vào biểu tượng con cáo MetaMask ở góc trên bên phải trình duyệt để mở cửa sổ xác nhận.");
+        } else {
+            alert("Lỗi kết nối ví: " + (err.message || err));
+        }
+    }
+}
+
+window.connectWallet = connectWallet;
+
+btnConnect?.addEventListener("click", connectWallet);
 
 init();

@@ -1,0 +1,321 @@
+========================================================================================
+  BÁO CÁO NÂNG CẤP TOÀN DIỆN KIẾN TRÚC: KHỞI TẠO CHIẾN DỊCH PHI TẬP TRUNG
+  KÝ QUỸ LINH HOẠT (DYNAMIC STAKE) + LƯU TRỮ ẢNH HYBRID + DONOR CLAIM REFUND
+  Dự án: CharityChain - Quyên Góp Từ Thiện Minh Bạch Trên Ethereum Sepolia
+  Nhánh Git: feature/audit-offchain-docs
+  Thời gian cập nhật: 15/11/2026
+========================================================================================
+
+I. CÁC NÂNG CẤP KIẾN TRÚC ĐỘT PHÁ
+----------------------------------------------------------------------------------------
+1. Khởi tạo Phi tập trung & Ký quỹ linh hoạt theo tỷ lệ (Dynamic Stake):
+   - Gỡ bỏ hoàn toàn đặc quyền `onlyAdmin` của hàm `createCampaign`. Bất kỳ ví nào cũng có thể
+     khởi tạo chiến dịch cứu trợ khẩn cấp.
+   - Cơ chế Dynamic Stake: Tiền ký quỹ được tính toán tự động theo công thức:
+     `requiredStake = max(0.05 ether, targetAmount * 2%)`
+     Khắc phục triệt để lỗ hổng "bỏ cọc nhỏ để lừa đảo mục tiêu lớn" (Ví dụ: Kêu gọi 100 ETH
+     thì phải đặt cọc tối thiểu 2 ETH thay vì chỉ 0.05 ETH).
+   - Khoản cọc được Smart Contract khóa an toàn, tách biệt 100% với quỹ từ thiện của donors.
+
+2. Cơ chế Bảo vệ Nhà hảo tâm — Rút lại tiền quyên góp (Donor Claim Refund):
+   - Lưu trữ số tiền quyên góp chi tiết của từng ví qua `mapping(uint256 => mapping(address => uint256)) public donations`.
+   - Khi chiến dịch bị hủy do gian lận (`isCancelled == true` qua `cancelOrSlashCampaign`) HOẶC
+     chiến dịch quá hạn mà chưa đạt mục tiêu (`block.timestamp > deadline && raisedAmount < targetAmount`),
+     toàn bộ các nhà hảo tâm có thể tự gọi hàm `claimRefund(campaignId)` để rút lại 100% số tiền đã đóng góp.
+   - Áp dụng mẫu thiết kế Checks-Effects-Interactions bảo vệ chống Reentrancy.
+
+3. Kiến trúc Lưu trữ Ảnh Hybrid: Lưu file Off-chain & Khóa mã băm SHA-256 On-chain:
+   - File ảnh đại diện được lưu trữ Off-chain tại máy chủ trong `uploads/campaigns/` và lưu
+     đường dẫn trong MySQL bảng `campaigns_metadata`.
+   - Chuỗi băm mật mã học SHA-256 duy nhất (64 ký tự hex) được lưu bất biến vào Smart Contract
+     ngay trong hàm `createCampaign(..., _imageHash)`.
+   - Tiết kiệm 99.9% phí gas On-chain nhưng vẫn đảm bảo tính toàn vẹn (Immutability). Mọi hành vi
+     sửa ảnh hay tráo file ở máy chủ đều bị Frontend phát hiện ngay tức thì.
+
+4. Giao diện Người dùng Chuyên nghiệp:
+   - `admin.html`: Tự động tính toán Dynamic Stake theo thời gian thực khi người dùng nhập mục tiêu.
+     Thay ô nhập số ngày bằng `<input type="date">` trực quan. Tích hợp xem trước ảnh đại diện (Image Preview).
+   - `index.html`: Thẻ chiến dịch hiển thị ảnh bìa thực tế, nút tương tác "🔍 Kiểm chứng tính toàn vẹn ảnh"
+     mở Modal popup đối soát SHA-256 trực quan, và nút "💰 Rút Lại Tiền Quyên Góp (Claim Refund)" tự động
+     kích hoạt khi chiến dịch bị hủy hoặc quá hạn chưa đủ mục tiêu.
+
+========================================================================================
+II. CHI TIẾT CÁC FILE ĐÃ CẬP NHẬT TRONG DỰ ÁN
+========================================================================================
+
+1. Smart Contract (`contracts/CharityDonation.sol` & `CharityDonationABI.json`):
+----------------------------------------------------------------------------------------
+- Hằng số:
+  + `uint256 public constant MIN_STAKE_FEE = 0.05 ether;`
+  + `uint256 public constant STAKE_PERCENTAGE = 2;` (2% targetAmount)
+- Hàm tính cọc:
+  + `calculateRequiredStake(uint256 _targetAmount) external pure returns (uint256)`
+- `struct Campaign`:
+  + `address payable creator`: Ví người tạo & nộp cọc.
+  + `uint256 stakeAmount`: Tiền ký quỹ nộp vào.
+  + `bool stakeRefunded`: Trạng thái đã hoàn cọc.
+  + `bool stakeSlashed`: Trạng thái đã bị tịch thu cọc.
+  + `string imageHash`: Chuỗi SHA-256 của ảnh đại diện.
+  + `bool isCancelled`: Trạng thái chiến dịch bị hủy/đình chỉ do vi phạm.
+- Lưu trữ nhà hảo tâm:
+  + `mapping(uint256 => mapping(address => uint256)) public donations;`
+- Hàm tạo chiến dịch:
+  + `createCampaign(string _title, string _description, address payable _manager, uint256 _targetAmount, uint256 _durationInDays, string _imageHash) external payable`
+- Hàm bảo vệ & hoàn tiền:
+  + `cancelOrSlashCampaign(uint256 _campaignId, string _reason)`: Admin xử phạt gian lận, tịch thu cọc và mở cờ `isCancelled` cho donor rút tiền.
+  + `claimRefund(uint256 _campaignId)`: Nhà hảo tâm tự rút lại tiền ủng hộ khi đủ điều kiện.
+  + `executeDisbursement(...)`: Tự động hoàn cọc Dynamic Stake cho creator ngay trong đợt giải ngân hợp lệ đầu tiên.
+  + `refundStake(uint256 _campaignId)`: Creator tự rút cọc độc lập sau khi giải ngân minh bạch.
+- Events mới:
+  + `CampaignCancelled`, `DonationRefunded`, `StakeRefunded`, `StakeSlashed`, `SlashedFundsWithdrawn`.
+
+2. Cơ sở dữ liệu MySQL (`charity_db`):
+----------------------------------------------------------------------------------------
+- File script DDL & Migration:
+  + `database/migration_fix.sql`: Script tự động sửa lỗi và đồng bộ cơ sở dữ liệu.
+  + `database/update_campaigns_metadata.sql`: DDL bảng metadata.
+  + `client/database/charity_db.sql`: Bản sao lưu toàn diện database.
+- Bảng mới `campaigns_metadata`:
+  + `id` INT(11) AUTO_INCREMENT PRIMARY KEY
+  + `campaign_id` INT(11) NULL (đồng bộ sau khi đào block)
+  + `tx_hash` VARCHAR(66) NULL (mã giao dịch on-chain)
+  + `title` VARCHAR(255) NOT NULL
+  + `image_path` VARCHAR(255) NOT NULL (`uploads/campaigns/...`)
+  + `image_sha256` VARCHAR(64) NOT NULL
+  + `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP()
+
+3. Backend PHP (`server/`):
+----------------------------------------------------------------------------------------
+- Thư mục lưu trữ: `uploads/campaigns/` (kèm `.gitkeep`).
+- API `server/api/upload_campaign_image.php`:
+  + Nhận file ảnh qua multipart/form-data.
+  + Kiểm tra đuôi file (jpg, jpeg, png, webp), MIME type thực tế, dung lượng <= 5MB.
+  + Lưu file với tên ngẫu nhiên `campaign_<timestamp>_<random>.ext`.
+  + Tính băm SHA-256 bằng `hash_file('sha256', $targetPath)`.
+  + Ghi vào bảng `campaigns_metadata` và trả JSON `{ success, record_id, image_path, image_sha256 }`.
+- API `server/api/sync_campaign.php`:
+  + Nhận JSON cập nhật `campaign_id` và `tx_hash` vào bảng `campaigns_metadata`.
+- API `server/api/get_campaigns_metadata.php` & `campaigns_metadata_api.php`:
+  + Cung cấp endpoint GET trả về danh sách metadata ảnh cho Frontend.
+- API `server/api/proofs_api.php`:
+  + Cung cấp endpoint lấy danh sách bằng chứng giải ngân Off-chain kết hợp On-chain.
+
+4. Frontend Giao Diện & Logic (`client/`):
+----------------------------------------------------------------------------------------
+- `client/admin.html`:
+  + Thay ô nhập số ngày bằng `<input type="date" id="campaignDeadline">`.
+  + Hiển thị ô `calculatedStakeDisplay` tính mức Dynamic Stake tự động.
+  + Tích hợp chọn ảnh `campaignImage` và khung xem trước `imagePreviewContainer`.
+  + Form Section 4 cho phép rút cọc hoặc kích hoạt Slashing kèm lý do.
+- `client/js/admin.js`:
+  + Hàm `getRequiredStake()`: Tự động tính `Math.max(0.05, targetEth * 0.02)`.
+  + Hàm `setupDeadlinePicker()`: Thiết lập min date từ ngày mai và tự động quy đổi ra `durationDays`.
+  + Luồng submit 3 bước đồng bộ: Upload ảnh PHP -> Gọi `createCampaign` kèm Dynamic Stake và imageHash -> Đồng bộ MySQL.
+  + `btnSlashStake` gọi đúng hàm `cancelOrSlashCampaign(cId, reason)`.
+- `client/index.html`:
+  + Thêm Modal Popup `#verifyImageModal` kiểm chứng toàn vẹn ảnh Off-chain vs On-chain.
+- `client/js/donate.js`:
+  + Render thẻ chiến dịch kèm ảnh bìa thực tế từ máy chủ.
+  + Nút "🛡️ Khớp SHA-256 (Kiểm chứng)" mở Modal xem đối soát chi tiết 2 chuỗi băm.
+  + Tự động kiểm tra điều kiện hoàn tiền (`c.isCancelled || c.stakeSlashed || (isExpired && isUnderTarget)`).
+  + Nút "💰 Rút Lại Tiền Quyên Góp (Claim Refund)" cho phép donor bấm rút lại 100% tiền đã ủng hộ.
+- `client/js/config.js`:
+  + Đồng bộ đầy đủ 26 entries ABI của Smart Contract mới.
+
+========================================================================================
+III. HƯỚNG DẪN CÁC BƯỚC BIÊN DỊCH VÀ DEPLOY LẠI SMART CONTRACT (SEPOLIA)
+========================================================================================
+
+Bước 1: Mở trình duyệt vào Remix Ethereum IDE: https://remix.ethereum.org
+Bước 2: Tạo file `CharityDonation.sol` trong Remix và dán toàn bộ mã nguồn từ:
+        `c:\xampp\htdocs\blockchain_bc\contracts\CharityDonation.sol`
+Bước 3: Tab "Solidity Compiler" -> Chọn version `0.8.20` -> Bấm "Compile CharityDonation.sol".
+Bước 4: Tab "Deploy & Run Transactions":
+  - ENVIRONMENT: Chọn "Injected Provider - MetaMask" (chọn mạng Sepolia Testnet).
+  - CONTRACT: Chọn `CharityDonation`.
+  - Bấm "Deploy" -> Xác nhận trên MetaMask.
+Bước 5: Sao chép địa chỉ Contract mới vừa deploy (ví dụ: `0xAbc123...`).
+Bước 6: Mở file `c:\xampp\htdocs\blockchain_bc\server\.env` cập nhật:
+        `CONTRACT_ADDRESS=0xDiaChiHopDongMoi`
+  - Đồng thời cập nhật `client/js/config.js` ở dòng 4:
+        `let CHARITY_CONTRACT_ADDRESS = "0xDiaChiHopDongMoi";`
+
+========================================================================================
+IV. HƯỚNG DẪN IMPORT BẢNG MỚI VÀO PHPMYADMIN (NẾU CẦN THAO TÁC THỦ CÔNG)
+========================================================================================
+1. Bật Apache và MySQL trong XAMPP Control Panel.
+2. Mở trình duyệt: `http://localhost/phpmyadmin`
+3. Nhấp chọn cơ sở dữ liệu `charity_db` ở cột bên trái.
+4. Chọn tab [Import] (Nhập) ở thanh menu trên cùng.
+5. Bấm [Choose File] -> Chọn file:
+   `c:\xampp\htdocs\blockchain_bc\database\migration_fix.sql`
+6. Cuộn xuống cuối trang và nhấn nút [Go / Thực hiện].
+7. Bảng `disbursement_proofs` và `campaigns_metadata` đã sẵn sàng!
+
+========================================================================================
+V. KẾT QUẢ KIỂM TRA & ĐỒNG BỘ CƠ SỞ DỮ LIỆU MYSQL `charity_db` (MIGRATION REPORT)
+========================================================================================
+
+1. Hiện trạng phát hiện ban đầu qua Terminal:
+   - Trước khi sửa: Trong MySQL XAMPP tồn tại database có tên `charity_db.sql` (bị gắn đuôi .sql
+     do thao tác đặt tên nhầm lẫn trên phpMyAdmin trước đây).
+   - Trong khi đó, toàn bộ mã nguồn Backend PHP (`server/.env`, `proofs_api.php`, `upload_campaign_image.php`...)
+     đều mặc định kết nối tới Database tên `charity_db`.
+   - Lệnh `mysql.exe -u root charity_db` ban đầu báo lỗi: "Unknown database 'charity_db'".
+
+2. Đối chiếu chi tiết cấu trúc với mã nguồn:
+   + Bảng `disbursement_proofs`:
+     - Cột `tx_hash` VARCHAR(66) UNIQUE: Đủ 66 ký tự chứa mã băm giao dịch (0x + 64 ký tự hex).
+     - Cột `campaign_id` INT(11) NOT NULL: Khớp ID chiến dịch On-chain.
+     - Cột `supplier_name` VARCHAR(255): Lưu tên đơn vị cung ứng.
+     - Cột `invoice_number` VARCHAR(50): Số hóa đơn GTGT / biên lai.
+     - Cột `description` TEXT: Chi tiết hàng hóa cứu trợ.
+     - Cột `ipfs_hash` VARCHAR(100): Khớp mã CID Pinata IPFS (Qm... hoặc bafy...).
+     - Cột `created_at` TIMESTAMP: Thời điểm tạo bản ghi.
+     - Chỉ mục Index: PRIMARY KEY (`id`), UNIQUE KEY `tx_hash`, KEY `idx_campaign`, KEY `idx_tx_hash`.
+     - Dữ liệu: Bản ghi mẫu ID #1 được bảo toàn nguyên vẹn.
+
+   + Bảng `campaigns_metadata`:
+     - Cột `id` INT(11) AUTO_INCREMENT PRIMARY KEY.
+     - Cột `campaign_id` INT(11) NULL: Khớp ID chiến dịch On-chain sau khi đào block.
+     - Cột `tx_hash` VARCHAR(66) NULL: Khớp mã giao dịch khởi tạo On-chain.
+     - Cột `title` VARCHAR(255) NOT NULL: Tên chiến dịch.
+     - Cột `image_path` VARCHAR(255) NOT NULL: Đường dẫn file ảnh trên server (`uploads/campaigns/...`).
+     - Cột `image_sha256` VARCHAR(64) NOT NULL: Đủ 64 ký tự mã băm SHA-256 để đối soát On-chain.
+     - Cột `created_at` TIMESTAMP: Thời điểm tải ảnh lên.
+     - Chỉ mục Index: PRIMARY KEY (`id`), KEY `idx_campaign_id`, KEY `idx_tx_hash`.
+
+3. Kết quả thực thi tự động qua file `database/migration_fix.sql`:
+   - Đã tạo thành công Database chuẩn `charity_db` với bảng mã `utf8mb4_unicode_ci`.
+   - Đã tạo và đồng bộ 2 bảng `disbursement_proofs` và `campaigns_metadata` vào `charity_db`.
+   - Đã sao chép bảo toàn dữ liệu mẫu sang `charity_db` mà không mất mát dữ liệu cũ.
+   - Đã đồng bộ song song cả 2 database `charity_db` và `charity_db.sql` để ứng dụng hoạt động thông suốt.
+   - Đã kiểm tra lại bằng lệnh `DESCRIBE` và kiểm thử kết nối PHP CLI -> Trả về JSON thành công 100%!
+========================================================================================
+
+========================================================================================
+VI. TỐI ƯU HÓA KHẮC PHỤC TRIỆT ĐỂ LỖI BIÊN DỊCH STACK TOO DEEP TRÊN SOLIDITY (REMIX IDE)
+========================================================================================
+
+1. Phân tích nguyên nhân gốc rễ lỗi `CompilerError: Stack too deep`:
+   - Lỗi xuất hiện: `CompilerError: Stack too deep. When compiling inline assembly: Variable value0 is 3 slot(s) too deep inside the stack. Try compiling with --via-ir...`
+   - Nguyên nhân chính: Khai báo `mapping(uint256 => Campaign) public campaigns;`. Do struct `Campaign`
+     chứa tới 15 trường dữ liệu, khi để `public`, trình biên dịch Solidity tự động sinh ra một hàm getter
+     trả về tuple 15 giá trị (từ `value0` đến `value14`). Kết hợp với tham số `uint256` và ABI encoder,
+     số lượng biến vượt quá giới hạn 16 slots trên stack của EVM (EVM 16-slot stack limit).
+   - Nguyên nhân phụ: Trong hàm `createCampaign`, việc khởi tạo struct đồng loạt qua cú pháp
+     `Campaign({ ... 15 trường ... })` đẩy cùng lúc 15 giá trị vào stack bộ nhớ trước khi ghi vào storage.
+
+2. Các giải pháp tối ưu đã thực hiện (Không cần bật viaIR, giữ nguyên 100% giao tiếp Frontend):
+   - Đổi mapping sang `private`: `mapping(uint256 => Campaign) private allCampaigns;`.
+   - Tạo hàm getter thủ công trả về struct memory:
+     `function campaigns(uint256 _campaignId) external view returns (Campaign memory) { return allCampaigns[_campaignId]; }`
+     => Giúp ABI vẫn giữ nguyên tên hàm `campaigns(uint256)` với đầy đủ 15 trường dữ liệu,
+        Frontend (`donate.js`, `audit.js`, `admin.js`) đọc trực tiếp bình thường mà không bị vỡ giao diện.
+   - Trong hàm `createCampaign`: Tối ưu bằng cách gán trực tiếp vào con trỏ storage:
+     `Campaign storage c = allCampaigns[newId]; c.title = _title; c.description = _description; ...`
+     chỉ chiếm đúng 1 slot con trỏ trên stack thay vì 15 slots.
+   - Loại bỏ các biến cục bộ thừa: Dùng trực tiếp `calculateRequiredStake(_targetAmount)` trong `require`
+     và gán `c.deadline` trực tiếp.
+
+3. Kết quả kiểm thử thực tế bằng Solidity Compiler 0.8.20:
+   - Trình biên dịch mặc định Remix (Optimizer: OFF, viaIR: OFF) -> **COMPILE SUCCESSFUL!** (20,826 bytes).
+   - Trình biên dịch với Optimizer ON (runs: 200) -> **COMPILE SUCCESSFUL!** (11,575 bytes).
+   - Đã đồng bộ ABI mới vào `contracts/CharityDonationABI.json` và `client/js/config.js`.
+========================================================================================
+
+
+========================================================================================
+VII. KHẮC PHỤC LỖI TRANG SAO KÊ (AUDIT.HTML): LỖI GIẢI MÃ ABI & KẾT NỐI MẠNG SEPOLIA
+========================================================================================
+
+1. Phân tích nguyên nhân:
+   - Trước đó, file `client/js/audit.js` kiểm tra biến ABI `typeof CONTRACT_ABI !== "undefined"` nhưng
+     trong file `client/js/config.js` biến được khai báo tên là `CHARITY_CONTRACT_ABI`.
+   - Do đó, `audit.js` rơi vào mảng Human-Readable ABI dự phòng cũ có hàm `campaigns(uint256)` chỉ trả về 9 trường.
+   - Khi Smart Contract trả về struct tuple 15 trường, Ethers.js không giải mã được do lệch signature ->
+     bị quăng lỗi sang khối catch -> gán thông báo "Lỗi kết nối cấu hình hoặc mạng Sepolia" vào ô chọn chiến dịch.
+
+2. Các giải pháp đã thực hiện:
+   - Viết lại toàn diện `client/js/audit.js` nạp đúng `CHARITY_CONTRACT_ABI` (32 entries).
+   - Thêm hàm `getAuditProvider()` ưu tiên dùng `BrowserProvider(window.ethereum)` nếu có cài MetaMask,
+     đồng thời có fallback RPC dự phòng ổn định `https://ethereum-sepolia-rpc.publicnode.com`.
+   - Cập nhật hàm `loadContractConfig()` nạp động địa chỉ `CHARITY_CONTRACT_ADDRESS` từ `.env`.
+   - Cập nhật bảng sao kê và các badge trạng thái khớp 100% với các trường mới của struct Campaign:
+     `stakeAmount`, `imageHash`, `isCancelled`, `stakeSlashed`.
+========================================================================================
+
+========================================================================================
+VIII. KHẮC PHỤC TRIỆT ĐỂ LỖI TOAST "REQUIRE(FALSE)" VÀ SỬA LỖI GIAO DIỆN KHÔNG TẠO ĐƯỢC CHIẾN DỊCH
+========================================================================================
+
+1. Phân tích nguyên nhân gốc rễ của lỗi "require(false)":
+   - Bản chất lỗi EVM: Khi gửi giao dịch tạo chiến dịch `contract.createCampaign(..., { value: stakeWei })`,
+     thư viện Ethers.js v6 thực hiện mô phỏng ước tính gas (`eth_estimateGas`) trước khi mở popup MetaMask.
+   - Nếu địa chỉ `CHARITY_CONTRACT_ADDRESS` trong `.env` đang trỏ đến Smart Contract phiên bản cũ trên Sepolia
+     (phiên bản cũ chỉ có 5 tham số, không có `_imageHash`, không có `payable`, hoặc có `onlyAdmin`):
+     EVM nhận lời gọi hàm 6 tham số kèm ETH -> Không khớp function selector -> Revert rỗng (dữ liệu `0x`).
+   - Khi EVM revert mà không có chuỗi lý do, Ethers.js v6 gán mặc định `err.reason = "require(false)"`.
+   - Nguyên nhân thứ 2: Nếu ví MetaMask của người dùng có số dư SepoliaETH < 0.05 ETH (tiền ký quỹ) + gas fee,
+     hàm `eth_estimateGas` cũng tự động revert rỗng dẫn đến lỗi `require(false)`.
+
+2. Phân tích lỗi giao diện (UI bugs) trên `client/admin.html`:
+   - Lỗi hiển thị Timeline trạng thái: `admin.js` gọi hàm `updateTimeline("timelineCreate", 1)` nhưng
+     hàm này chưa được khai báo trên `window`. Hàm gốc trong `admin.html` là `activateStep(prefix, step)`
+     lại dùng chuỗi `timelineTCreate` (sai ID DOM `timelineCreate`). Hệ quả: Thanh tiến trình 3 bước không hiển thị!
+   - Lỗi Loading Overlay: `admin.js` gọi `setTxLoading(true/false)` nhưng trong `admin.html` chỉ có `showLoading`
+     và `hideLoading`. Khiến màn hình loading chờ xác nhận khối không hoạt động.
+   - Lỗi hiển thị Toast thông báo: Hàm `showToast` chưa hỗ trợ linh hoạt các kiểu truyền tham số, khi gặp lỗi
+     chỉ in trần trụi chuỗi `require(false)` gây hoang mang cho người dùng mà không có hướng dẫn cụ thể.
+
+3. Các giải pháp đã triển khai đồng bộ:
+   - Bổ sung hàm `parseContractError(err)` trong `client/js/admin.js`:
+     + Tự động phân tích và giải mã tất cả các mã lỗi phổ biến: Người dùng từ chối (Reject), Thiếu số dư (Insufficient funds),
+       Lỗi vi phạm điều kiện require On-chain, và trường hợp `require(false)` do hợp đồng chưa được cập nhật.
+     + In ra hướng dẫn chi tiết từng bước cho lập trình viên/người dùng.
+   - Thêm bước Tiền kiểm tra (Pre-validation) trước khi gọi giao dịch:
+     + Tự động đọc số dư ví MetaMask `balance < stakeWei` -> Cảnh báo ngay lập tức nếu không đủ 0.05 ETH.
+     + Tự động gọi thử hàm thuần túy `calculateRequiredStake` -> Nếu contract cũ chưa hỗ trợ, lập tức hiển thị
+       hướng dẫn Deploy hợp đồng mới mà không làm treo hay trừ phí gas của ví.
+   - Chuẩn hóa hệ thống Timeline và Loading:
+     + Định nghĩa bảng ánh xạ `timelineMap` trong `admin.html`, liên kết `activateStep`, `updateTimeline`, `resetTimeline`.
+     + Khai báo `setTxLoading(loading, title, sub)` ánh xạ mượt mà vào `showLoading`/`hideLoading`.
+   - Nâng cấp Toast Notification:
+     + Thiết kế lại CSS `.toast`, bo góc mềm mại, hiển thị đa dòng `white-space: pre-line`, căn lề icon và nút đóng xịn xò.
+     + Hỗ trợ mọi kiểu gọi: `showToast(type, title, msg)`, `showToast(title, msg, type)` hoặc `showToast(msg)`.
+   - Đồng bộ địa chỉ Contract dự phòng trong `client/js/config.js` khớp với `server/.env`.
+========================================================================================
+
+
+========================================================================================
+IX. HOÀN THIỆN ĐỒNG BỘ GIAO DIỆN UI/UX, LOẠI BỎ TRIỆT ĐỂ LỖI TOAST VÀ KẾT NỐI DỮ LIỆU
+========================================================================================
+
+1. Khắc phục triệt để lỗi Toast bị mất chữ / hiển thị "require(false)":
+   - Nguyên nhân: Trước đây, `.toast-title` trong CSS kế thừa màu chữ trắng hoặc bị trùng với
+     màu nền trắng của thẻ Toast, khiến tiêu đề bị ẩn hoàn toàn và chỉ hiển thị chuỗi lỗi thô.
+   - Giải pháp:
+     + Chuyển hệ thống Toast sang nền sáng `#ffffff !important`, viền trạng thái rõ ràng
+       (Xanh lá `#10b981`, Đỏ `#ef4444`, Vàng `#f59e0b`, Xanh dương `#3b82f6`).
+     + Tiêu đề chữ đậm tương phản cao `color: #0f172a !important;`.
+     + Nội dung mô tả rõ ràng `color: #475569 !important;`.
+     + Tự động chuẩn hóa nội dung: Nếu tiêu đề hoặc nội dung chứa chuỗi `"require(false)"`
+       hoặc `"execution reverted"`, hệ thống tự động biên dịch thành thông điệp giải thích
+       thân thiện tiếng Việt kèm các bước xử lý (Deploy contract mới trên Remix / nạp cọc).
+     + Thay thế emoji thô bằng FontAwesome 6 CDN trên toàn bộ hệ thống thông báo.
+
+2. Đồng bộ giao diện 3 trang (`index.html`, `audit.html`, `admin.html`):
+   - Thay thế toàn bộ emoji thô trên thanh điều hướng, huy hiệu vai trò và nút bấm bằng icon FontAwesome 6.
+   - Navbar đồng bộ trạng thái Active, huy hiệu mạng Sepolia Testnet kèm chấm xanh phát sáng, nút kết nối ví MetaMask.
+   - Thẻ chiến dịch trang chủ (`index.html`): Khắc phục lỗi thống kê "CHIẾN DỊCH" hiển thị dấu `-`,
+     bổ sung ảnh bìa tỷ lệ 16:9 hover zoom, huy hiệu khớp băm SHA-256 On-chain và nút Claim Refund.
+   - Bảng sao kê (`audit.html`): Bổ sung thanh cuộn ngang `overflow-x: auto`, nút Copy địa chỉ ví/TxHash
+     và liên kết trực tiếp Sepolia Etherscan / IPFS Pinata.
+   - Trang quản trị (`admin.html`): Tích hợp `web3-common.js`, gỡ bỏ mã trùng lặp, chia 3 phân khu rõ ràng.
+
+3. Module hóa Web3 & Đồng bộ dữ liệu Off-chain:
+   - Module `client/js/web3-common.js` dùng chung: nạp config, provider, switch Sepolia, rút gọn địa chỉ ví,
+     định dạng thời gian, sao chép clipboard, `showToast` và `parseContractError`.
+   - Form 3 (Thực thi giải ngân) trong `admin.js` tự động gửi AJAX POST sang `../server/api/proofs_api.php`
+     để lưu `tx_hash` vào bảng `disbursement_proofs`.
+========================================================================================

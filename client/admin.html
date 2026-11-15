@@ -1,221 +1,1660 @@
 <!doctype html>
 <html lang="vi">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>CharityChain - Quản Trị & Giải Ngân</title>
-    <link rel="stylesheet" href="css/style.css" />
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
-  </head>
-  <body>
-    <header class="navbar">
-      <div class="brand"><span>⚙️</span> CharityChain - Quản Trị</div>
-      <div class="nav-right">
-        <span id="walletAddress" class="wallet-badge"></span>
-        <button id="btnConnect" class="btn btn-primary" onclick="connectWallet()">
-          Kết Nối Ví MetaMask
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CharityChain Admin – Quản Trị & Giải Ngân</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <link rel="stylesheet" href="css/style.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
+
+  <style>
+    /* ─── Admin-specific variables ─── */
+    :root {
+      --sidebar-w: 260px;
+      --sidebar-bg: #0f172a;
+      --sidebar-border: rgba(255, 255, 255, 0.07);
+      --sidebar-active: rgba(99, 102, 241, 0.18);
+      --sidebar-hover: rgba(255, 255, 255, 0.06);
+      --header-h: 68px;
+      --accent: #6366f1;
+      --accent-light: #818cf8;
+      --danger: #ef4444;
+      --success: #22c55e;
+      --warning: #f59e0b;
+      --radius: 14px;
+      --shadow: 0 4px 24px rgba(0, 0, 0, 0.10);
+      --card-bg: #fff;
+      --text-main: #1e293b;
+      --text-muted: #64748b;
+      --border: #e2e8f0;
+      --input-bg: #f8fafc;
+    }
+
+    /* ─── Reset & base ─── */
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: #f1f5f9;
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      overflow-x: hidden;
+    }
+
+    /* ════════════════════════════════
+         SIDEBAR
+      ════════════════════════════════ */
+    .admin-sidebar {
+      width: var(--sidebar-w);
+      min-height: 100vh;
+      background: var(--sidebar-bg);
+      display: flex;
+      flex-direction: column;
+      position: fixed;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      z-index: 100;
+      border-right: 1px solid var(--sidebar-border);
+      transition: transform 0.3s cubic-bezier(.4, 0, .2, 1);
+    }
+
+    /* Logo area */
+    .sidebar-logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 24px 20px 20px;
+      border-bottom: 1px solid var(--sidebar-border);
+      text-decoration: none;
+    }
+
+    .sidebar-logo-icon {
+      width: 40px;
+      height: 40px;
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      flex-shrink: 0;
+      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+    }
+
+    .sidebar-logo-text {
+      color: #fff;
+      font-weight: 700;
+      font-size: 1rem;
+      line-height: 1.2;
+    }
+
+    .sidebar-logo-sub {
+      color: rgba(255, 255, 255, 0.45);
+      font-size: 0.72rem;
+      font-weight: 500;
+      letter-spacing: .5px;
+    }
+
+    /* Navigation */
+    .sidebar-nav {
+      flex: 1;
+      padding: 20px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .nav-section-label {
+      color: rgba(255, 255, 255, 0.3);
+      font-size: 0.65rem;
+      font-weight: 700;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+      padding: 10px 10px 6px;
+    }
+
+    .sidebar-nav-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      color: rgba(255, 255, 255, 0.65);
+      text-decoration: none;
+      font-size: 0.875rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.18s;
+      border: none;
+      background: none;
+      width: 100%;
+      text-align: left;
+    }
+
+    .sidebar-nav-item:hover {
+      background: var(--sidebar-hover);
+      color: #fff;
+    }
+
+    .sidebar-nav-item.active {
+      background: var(--sidebar-active);
+      color: var(--accent-light);
+      font-weight: 600;
+    }
+
+    .nav-icon {
+      font-size: 1.1rem;
+      width: 22px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+
+    .nav-badge {
+      margin-left: auto;
+      background: rgba(99, 102, 241, 0.3);
+      color: var(--accent-light);
+      font-size: 0.65rem;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 20px;
+    }
+
+    /* Wallet info in sidebar */
+    .sidebar-wallet {
+      margin: 0 12px 12px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--sidebar-border);
+      border-radius: 12px;
+      padding: 14px;
+    }
+
+    .sidebar-wallet-label {
+      color: rgba(255, 255, 255, 0.4);
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: .5px;
+      margin-bottom: 6px;
+    }
+
+    .sidebar-wallet-addr {
+      color: #fff;
+      font-size: 0.8rem;
+      font-family: 'Courier New', monospace;
+      word-break: break-all;
+      min-height: 16px;
+    }
+
+    .sidebar-wallet-addr:empty::before {
+      content: 'Chưa kết nối';
+      color: rgba(255, 255, 255, 0.3);
+      font-style: italic;
+    }
+
+    .network-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: rgba(34, 197, 94, 0.15);
+      color: #4ade80;
+      font-size: 0.72rem;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 20px;
+      margin-top: 8px;
+      border: 1px solid rgba(74, 222, 128, 0.25);
+    }
+
+    .network-badge::before {
+      content: '';
+      width: 6px;
+      height: 6px;
+      background: #4ade80;
+      border-radius: 50%;
+      animation: pulse-dot 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse-dot {
+
+      0%,
+      100% {
+        opacity: 1;
+        transform: scale(1)
+      }
+
+      50% {
+        opacity: .5;
+        transform: scale(.8)
+      }
+    }
+
+    /* Sidebar back link */
+    .sidebar-back {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0 12px 20px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      color: rgba(255, 255, 255, 0.5);
+      text-decoration: none;
+      font-size: 0.82rem;
+      transition: all 0.18s;
+    }
+
+    .sidebar-back:hover {
+      background: var(--sidebar-hover);
+      color: #fff;
+    }
+
+    /* ════════════════════════════════
+         MAIN WRAPPER
+      ════════════════════════════════ */
+    .admin-main {
+      margin-left: var(--sidebar-w);
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      min-width: 0;
+    }
+
+    /* ─── Top Header ─── */
+    .admin-header {
+      height: var(--header-h);
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 28px;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      box-shadow: 0 1px 12px rgba(0, 0, 0, 0.06);
+    }
+
+    .header-left {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .breadcrumb {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .breadcrumb a {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 500;
+    }
+
+    .breadcrumb a:hover {
+      text-decoration: underline;
+    }
+
+    .breadcrumb-sep {
+      opacity: .4;
+    }
+
+    .header-title {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    /* Hamburger (mobile) */
+    .hamburger {
+      display: none;
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 7px 10px;
+      cursor: pointer;
+      font-size: 1.1rem;
+      color: var(--text-main);
+      transition: background 0.15s;
+    }
+
+    .hamburger:hover {
+      background: #f1f5f9;
+    }
+
+    /* ─── Wallet connect button ─── */
+    .btn-connect {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 20px;
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-weight: 600;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: opacity 0.18s, transform 0.18s, box-shadow 0.18s;
+      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35);
+    }
+
+    .btn-connect:hover:not(:disabled) {
+      opacity: .88;
+      transform: translateY(-1px);
+      box-shadow: 0 6px 18px rgba(99, 102, 241, 0.45);
+    }
+
+    .btn-connect:disabled {
+      opacity: .7;
+      cursor: default;
+      transform: none;
+    }
+
+    /* wallet address badge (header area) */
+    #walletAddress {
+      display: none;
+      background: #f1f5f9;
+      color: var(--text-main);
+      font-family: 'Courier New', monospace;
+      font-size: 0.78rem;
+      padding: 7px 14px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      font-weight: 600;
+    }
+
+    /* adminRoleBadge */
+    #adminRoleBadge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      border: 1px solid transparent;
+      min-width: 60px;
+    }
+
+    /* ════════════════════════════════
+         CONTENT AREA
+      ════════════════════════════════ */
+    .admin-content {
+      flex: 1;
+      padding: 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+      max-width: 920px;
+    }
+
+    /* ─── Section cards ─── */
+    .admin-card {
+      background: var(--card-bg);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      border: 1px solid var(--border);
+      overflow: hidden;
+      transition: box-shadow 0.2s;
+    }
+
+    .admin-card:hover {
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 20px 24px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .card-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.3rem;
+      flex-shrink: 0;
+    }
+
+    .card-icon-blue {
+      background: linear-gradient(135deg, #ede9fe, #dbeafe);
+    }
+
+    .card-icon-green {
+      background: linear-gradient(135deg, #dcfce7, #d1fae5);
+    }
+
+    .card-icon-red {
+      background: linear-gradient(135deg, #fee2e2, #fecaca);
+    }
+
+    .card-title {
+      font-size: 1.05rem;
+      font-weight: 700;
+    }
+
+    .card-subtitle {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .card-body {
+      padding: 22px 24px;
+    }
+
+    /* ─── Form styles ─── */
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 16px;
+    }
+
+    .form-group:last-of-type {
+      margin-bottom: 0;
+    }
+
+    .form-label {
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .label-required {
+      color: var(--danger);
+    }
+
+    .form-control {
+      width: 100%;
+      padding: 10px 14px;
+      background: var(--input-bg);
+      border: 1.5px solid var(--border);
+      border-radius: 9px;
+      font-size: 0.88rem;
+      font-family: inherit;
+      color: var(--text-main);
+      transition: border-color 0.18s, box-shadow 0.18s;
+      outline: none;
+    }
+
+    .form-control:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+      background: #fff;
+    }
+
+    .form-control::placeholder {
+      color: #94a3b8;
+    }
+
+    .form-control.is-valid {
+      border-color: var(--success);
+    }
+
+    .form-control.is-invalid {
+      border-color: var(--danger);
+    }
+
+    textarea.form-control {
+      resize: vertical;
+      min-height: 80px;
+    }
+
+    /* Hint text */
+    .form-hint {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    /* File upload */
+    .file-upload-wrapper {
+      position: relative;
+    }
+
+    .file-upload-input {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+      width: 100%;
+      height: 100%;
+    }
+
+    .file-upload-label {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      background: var(--input-bg);
+      border: 1.5px dashed var(--border);
+      border-radius: 9px;
+      font-size: 0.84rem;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.18s;
+    }
+
+    .file-upload-label:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: rgba(99, 102, 241, 0.04);
+    }
+
+    .file-upload-label .upload-icon {
+      font-size: 1.1rem;
+    }
+
+    #fileNameDisplay {
+      font-size: 0.75rem;
+      color: var(--accent);
+      margin-top: 4px;
+    }
+
+    /* Preview box */
+    .campaign-preview {
+      background: linear-gradient(135deg, #f0f9ff, #ede9fe);
+      border: 1px solid #c7d2fe;
+      border-radius: 10px;
+      padding: 12px 16px;
+      margin-top: 4px;
+      font-size: 0.85rem;
+      display: none;
+    }
+
+    .campaign-preview.visible {
+      display: block;
+    }
+
+    .preview-label {
+      font-size: 0.7rem;
+      font-weight: 700;
+      color: var(--accent);
+      letter-spacing: .5px;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+
+    .preview-name {
+      font-weight: 700;
+      color: var(--text-main);
+      font-size: 0.95rem;
+    }
+
+    /* Warning box */
+    .warning-box {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      background: #fff7ed;
+      border: 1px solid #fed7aa;
+      border-left: 4px solid var(--warning);
+      border-radius: 10px;
+      padding: 14px 16px;
+      margin-bottom: 20px;
+      font-size: 0.84rem;
+      color: #92400e;
+    }
+
+    .warning-box.danger {
+      background: #fff1f2;
+      border-color: #fecaca;
+      border-left-color: var(--danger);
+      color: #991b1b;
+    }
+
+    .warning-icon {
+      font-size: 1.2rem;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    .warning-title {
+      font-weight: 700;
+      margin-bottom: 2px;
+    }
+
+    /* Submit button */
+    .btn-submit {
+      width: 100%;
+      padding: 12px;
+      background: linear-gradient(135deg, var(--accent), #8b5cf6);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: 0.9rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: opacity 0.18s, transform 0.18s, box-shadow 0.18s;
+      box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);
+      margin-top: 20px;
+    }
+
+    .btn-submit:hover:not(:disabled) {
+      opacity: .88;
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(99, 102, 241, 0.45);
+    }
+
+    .btn-submit:disabled {
+      opacity: .6;
+      cursor: default;
+      transform: none;
+    }
+
+    .btn-exec {
+      background: linear-gradient(135deg, var(--danger), #be185d);
+      box-shadow: 0 4px 14px rgba(239, 68, 68, 0.35);
+    }
+
+    .btn-exec:hover:not(:disabled) {
+      box-shadow: 0 6px 20px rgba(239, 68, 68, 0.45);
+    }
+
+    /* ─── Status timeline ─── */
+    .tx-timeline {
+      display: none;
+      margin-top: 20px;
+      padding: 16px;
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+    }
+
+    .tx-timeline.visible {
+      display: block;
+    }
+
+    .timeline-title {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      letter-spacing: .6px;
+      text-transform: uppercase;
+      margin-bottom: 14px;
+    }
+
+    .timeline-steps {
+      display: flex;
+      align-items: center;
+      gap: 0;
+    }
+
+    .timeline-step {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      position: relative;
+    }
+
+    .timeline-step:not(:last-child)::after {
+      content: '';
+      position: absolute;
+      top: 15px;
+      left: 50%;
+      width: 100%;
+      height: 2px;
+      background: #e2e8f0;
+      z-index: 0;
+      transition: background 0.4s;
+    }
+
+    .timeline-step.done:not(:last-child)::after {
+      background: var(--success);
+    }
+
+    .step-dot {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      background: #e2e8f0;
+      color: #94a3b8;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+      font-weight: 700;
+      z-index: 1;
+      position: relative;
+      transition: background 0.4s, color 0.4s;
+    }
+
+    .timeline-step.active .step-dot {
+      background: var(--accent);
+      color: #fff;
+      box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.2);
+      animation: pulse-step 1.5s ease-in-out infinite;
+    }
+
+    .timeline-step.done .step-dot {
+      background: var(--success);
+      color: #fff;
+    }
+
+    @keyframes pulse-step {
+
+      0%,
+      100% {
+        box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.2)
+      }
+
+      50% {
+        box-shadow: 0 0 0 8px rgba(99, 102, 241, 0.08)
+      }
+    }
+
+    .step-label {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      font-weight: 500;
+      text-align: center;
+      white-space: nowrap;
+    }
+
+    .timeline-step.active .step-label {
+      color: var(--accent);
+      font-weight: 700;
+    }
+
+    .timeline-step.done .step-label {
+      color: var(--success);
+      font-weight: 600;
+    }
+
+    /* ════════════════════════════════
+         TOAST NOTIFICATIONS (Chuẩn tương phản cao)
+      ════════════════════════════════ */
+    #toastContainer {
+      position: fixed;
+      top: 24px;
+      right: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      z-index: 99999;
+      pointer-events: none;
+    }
+
+    .toast {
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+      background: #ffffff !important;
+      color: #0f172a !important;
+      border-radius: 12px;
+      padding: 16px 20px;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.12), 0 8px 10px -6px rgba(0, 0, 0, 0.08);
+      border: 1px solid #e2e8f0;
+      min-width: 320px;
+      max-width: 460px;
+      pointer-events: all;
+      animation: toast-in 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      border-left: 5px solid #6366f1;
+    }
+
+    .toast.success {
+      border-left-color: #10b981 !important;
+    }
+
+    .toast.error {
+      border-left-color: #ef4444 !important;
+    }
+
+    .toast.warning {
+      border-left-color: #f59e0b !important;
+    }
+
+    .toast.info {
+      border-left-color: #3b82f6 !important;
+    }
+
+    @keyframes toast-in {
+      from {
+        opacity: 0;
+        transform: translateX(40px)
+      }
+
+      to {
+        opacity: 1;
+        transform: translateX(0)
+      }
+    }
+
+    .toast-icon {
+      font-size: 1.35rem;
+      flex-shrink: 0;
+      line-height: 1;
+      margin-top: 1px;
+    }
+
+    .toast-body {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .toast-title {
+      font-weight: 700;
+      font-size: 0.92rem;
+      margin-bottom: 4px;
+      color: #0f172a !important;
+      line-height: 1.3;
+    }
+
+    .toast-msg {
+      font-size: 0.83rem;
+      color: #475569 !important;
+      word-break: break-word;
+      line-height: 1.5;
+      white-space: pre-line;
+    }
+
+    .toast-close {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: #94a3b8 !important;
+      font-size: 1rem;
+      line-height: 1;
+      padding: 2px;
+      flex-shrink: 0;
+      transition: color 0.15s;
+    }
+
+    .toast-close:hover {
+      color: #0f172a !important;
+    }
+
+    /* ════════════════════════════════
+         LOADING OVERLAY
+      ════════════════════════════════ */
+    #loadingOverlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.5);
+      backdrop-filter: blur(4px);
+      z-index: 999;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #loadingOverlay.visible {
+      display: flex;
+    }
+
+    .loading-box {
+      background: #fff;
+      border-radius: 20px;
+      padding: 36px 40px;
+      text-align: center;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+      min-width: 260px;
+    }
+
+    .spinner {
+      width: 48px;
+      height: 48px;
+      border: 4px solid #e2e8f0;
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.9s linear infinite;
+      margin: 0 auto 16px;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    .loading-title {
+      font-weight: 700;
+      font-size: 1rem;
+      margin-bottom: 4px;
+    }
+
+    .loading-sub {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+    }
+
+    /* ════════════════════════════════
+         MOBILE RESPONSIVE
+      ════════════════════════════════ */
+    @media (max-width: 768px) {
+      .admin-sidebar {
+        transform: translateX(-100%);
+      }
+
+      .admin-sidebar.open {
+        transform: translateX(0);
+        box-shadow: 0 0 0 100vw rgba(0, 0, 0, 0.5);
+      }
+
+      .admin-main {
+        margin-left: 0;
+      }
+
+      .hamburger {
+        display: flex;
+        align-items: center;
+      }
+
+      .admin-content {
+        padding: 16px;
+      }
+
+      .form-row {
+        grid-template-columns: 1fr;
+      }
+
+      #toastContainer {
+        left: 16px;
+        right: 16px;
+        bottom: 16px;
+      }
+
+      .toast {
+        min-width: unset;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- ═══════════════════════════════════
+         SIDEBAR
+    ════════════════════════════════════ -->
+  <aside class="admin-sidebar" id="adminSidebar">
+    <!-- Logo -->
+    <a href="index.html" class="sidebar-logo">
+      <div class="sidebar-logo-icon">
+        <i class="fa-solid fa-hand-holding-heart" style="color: #6366f1; font-size: 1.15rem;"></i>
+      </div>
+      <div>
+        <div class="sidebar-logo-text">CharityChain</div>
+        <div class="sidebar-logo-sub">ADMIN PANEL</div>
+      </div>
+    </a>
+
+    <!-- Navigation -->
+    <nav class="sidebar-nav">
+      <div class="nav-section-label">Chức năng</div>
+
+      <button class="sidebar-nav-item active" onclick="scrollToSection('section-create')" id="navCreate">
+        <span class="nav-icon"><i class="fa-solid fa-rocket"></i></span>
+        Tạo Chiến Dịch
+        <span class="nav-badge" style="background: rgba(16,185,129,0.25); color: #10b981;">0.05 ETH</span>
+      </button>
+
+      <button class="sidebar-nav-item" onclick="scrollToSection('section-disburse')" id="navDisburse">
+        <span class="nav-icon"><i class="fa-solid fa-file-invoice-dollar"></i></span>
+        Giải Ngân
+        <span class="nav-badge">Manager</span>
+      </button>
+
+      <button class="sidebar-nav-item" onclick="scrollToSection('section-execute')" id="navExecute">
+        <span class="nav-icon"><i class="fa-solid fa-check-double"></i></span>
+        Thực Thi Giải Ngân
+        <span class="nav-badge">Admin</span>
+      </button>
+
+      <button class="sidebar-nav-item" onclick="scrollToSection('section-stake')" id="navStake">
+        <span class="nav-icon"><i class="fa-solid fa-shield-halved"></i></span>
+        Quản Lý Ký Quỹ
+        <span class="nav-badge">PoS / Slash</span>
+      </button>
+
+      <div class="nav-section-label" style="margin-top:12px;">Hệ thống</div>
+
+      <a href="index.html" class="sidebar-nav-item">
+        <span class="nav-icon"><i class="fa-solid fa-house"></i></span>
+        Trang Chủ
+      </a>
+
+      <a href="audit.html" class="sidebar-nav-item">
+        <span class="nav-icon"><i class="fa-solid fa-chart-line"></i></span>
+        Tra Cứu Sao Kê
+      </a>
+    </nav>
+
+    <!-- Wallet info -->
+    <div class="sidebar-wallet">
+      <div class="sidebar-wallet-label">VÍ ĐANG KẾT NỐI</div>
+      <div class="sidebar-wallet-addr" id="sidebarWalletAddr"></div>
+      <div class="network-badge"><i class="fa-brands fa-ethereum"></i> Sepolia Testnet</div>
+    </div>
+
+    <!-- Back link -->
+    <a href="index.html" class="sidebar-back">
+      <i class="fa-solid fa-arrow-left"></i> Về trang chủ
+    </a>
+  </aside>
+
+  <!-- Overlay for mobile sidebar -->
+  <div id="sidebarOverlay" onclick="closeSidebar()"
+    style="display:none;position:fixed;inset:0;z-index:99;background:transparent;"></div>
+
+  <!-- ═══════════════════════════════════
+         MAIN
+    ════════════════════════════════════ -->
+  <div class="admin-main">
+
+    <!-- Top header -->
+    <header class="admin-header">
+      <div style="display:flex;align-items:center;gap:14px;">
+        <button class="hamburger" id="hamburgerBtn" onclick="toggleSidebar()" aria-label="Menu">
+          <i class="fa-solid fa-bars"></i>
         </button>
-        <a
-          href="index.html"
-          class="btn"
-          style="
-            text-decoration: none;
-            color: var(--text-main);
-            border: 1px solid var(--border);
-          "
-          >Về Trang Chủ</a
-        >
+        <div class="header-left">
+          <div class="breadcrumb">
+            <a href="index.html">Trang chủ</a>
+            <span class="breadcrumb-sep">/</span>
+            <span>Quản trị</span>
+          </div>
+          <div class="header-title">Bảng Điều Khiển Admin</div>
+        </div>
+      </div>
+
+      <div class="header-right">
+        <!-- Sepolia badge -->
+        <span class="badge-network">
+          <span class="dot"></span>
+          <i class="fa-brands fa-ethereum"></i> Sepolia Testnet
+        </span>
+        <!-- Role badge placeholder (admin.js will populate) -->
+        <span id="adminRoleBadge"></span>
+        <!-- Wallet address badge -->
+        <span id="walletAddress"></span>
+        <!-- Connect button -->
+        <button id="btnConnect" class="btn-connect" onclick="connectWallet()">
+          <i class="fa-solid fa-wallet"></i> Kết Nối MetaMask
+        </button>
       </div>
     </header>
 
-    <main class="container">
-      <div
-        style="
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 24px;
-          margin-bottom: 24px;
-        "
-      >
-        <!-- 1. Form Tạo Chiến Dịch (Dành cho Admin) -->
-        <section class="card">
-          <h2 style="font-size: 1.25rem; margin-bottom: 16px">
-            1. Khởi Tạo Chiến Dịch Mới
-          </h2>
-          <form id="formCreateCampaign">
-            <div class="form-group">
-              <label for="campaignTitle">Tên chiến dịch</label>
-              <input
-                type="text"
-                id="campaignTitle"
-                placeholder="Ví dụ: Cứu trợ lũ lụt Miền Trung"
-                required
-              />
-            </div>
-            <div class="form-group">
-              <label for="campaignDesc">Mô tả hoàn cảnh & mục đích</label>
-              <textarea
-                id="campaignDesc"
-                rows="3"
-                placeholder="Chi tiết mục đích kêu gọi..."
-                required
-              ></textarea>
-            </div>
-            <div class="form-group">
-              <label for="campaignManager">Địa chỉ ví Trưởng ban quản lý</label>
-              <input
-                type="text"
-                id="campaignManager"
-                placeholder="0x..."
-                required
-              />
-            </div>
-            <div class="form-group">
-              <label for="campaignTarget">Mục tiêu kêu gọi (ETH)</label>
-              <input
-                type="number"
-                id="campaignTarget"
-                step="0.01"
-                min="0.01"
-                placeholder="Ví dụ: 2.5"
-                required
-              />
-            </div>
-            <div class="form-group">
-              <label for="campaignDays">Thời hạn quyên góp (Số ngày)</label>
-              <input
-                type="number"
-                id="campaignDays"
-                min="1"
-                placeholder="Ví dụ: 30"
-                required
-              />
-            </div>
-            <button
-              type="submit"
-              id="btnSubmitCampaign"
-              class="btn btn-primary"
-              style="width: 100%"
-            >
-              Tạo Chiến Dịch Lên Blockchain
-            </button>
-          </form>
-        </section>
+    <!-- Content -->
+    <div class="admin-content">
 
-        <!-- 2. Form Đề Xuất Giải Ngân Minh Bạch (Dành cho Manager) -->
-        <section class="card">
-          <h2 style="font-size: 1.25rem; margin-bottom: 16px">
-            2. Tạo Đề Xuất Giải Ngân Đợt Tiền
-          </h2>
-          <form id="formRequestDisbursement">
-            <div class="form-group">
-              <label for="disburseCampaignId"
-                >Mã chiến dịch (Campaign ID)</label
-              >
-              <input
-                type="number"
-                id="disburseCampaignId"
-                min="0"
-                placeholder="Ví dụ: 0"
-                required
-              />
+      <!-- ── SECTION 1: Tạo Chiến Dịch ── -->
+      <section class="admin-card" id="section-create">
+        <div class="card-header">
+          <div class="card-icon card-icon-blue">🚀</div>
+          <div>
+            <div class="card-title">Khởi Tạo Chiến Dịch Mới (Phi Tập Trung)</div>
+            <div class="card-subtitle">Mọi thành viên đều có thể khởi tạo chiến dịch bằng cách ký quỹ 0.05 ETH (được
+              hoàn lại 100% khi giải ngân minh bạch)</div>
+          </div>
+        </div>
+        <div class="card-body">
+          <!-- Box thông báo cam kết tài chính (Stake-based) -->
+          <div
+            style="background: linear-gradient(135deg, #eff6ff 0%, #f5f3ff 100%); border: 1.5px solid #c7d2fe; border-radius: 12px; padding: 14px 18px; margin-bottom: 20px; display: flex; gap: 14px; align-items: flex-start;">
+            <div style="font-size: 1.5rem; line-height: 1;">🛡️</div>
+            <div>
+              <div style="font-weight: 700; color: #1e1b4b; font-size: 0.92rem; margin-bottom: 3px;">
+                Cơ Chế Ký Quỹ Chống Gian Lận (Stake-based Permissionless Creation)
+              </div>
+              <div style="font-size: 0.82rem; color: #4338ca; line-height: 1.5;">
+                Mức ký quỹ bắt buộc: <strong>0.05 ETH</strong>. Khoản ký quỹ này được Smart Contract khóa an toàn nhằm
+                ngăn chặn việc tạo chiến dịch rác hoặc lừa đảo. Khi chiến dịch hoàn thành đợt giải ngân minh bạch đầu
+                tiên kèm chứng từ IPFS, tiền ký quỹ sẽ được <strong>tự động hoàn lại 100%</strong> vào ví người tạo.
+              </div>
             </div>
-            <div class="form-group">
-              <label for="disbursePurpose">Mục đích chi tiêu cụ thể</label>
-              <input
-                type="text"
-                id="disbursePurpose"
-                placeholder="Ví dụ: Mua 500 thùng mì & nước ngọt"
-                required
-              />
-            </div>
-            <div class="form-group">
-              <label for="disburseAmount">Số tiền cần rút (ETH)</label>
-              <input
-                type="number"
-                id="disburseAmount"
-                step="0.001"
-                min="0.0001"
-                placeholder="Ví dụ: 0.5"
-                required
-              />
-            </div>
-            <div class="form-group">
-              <label for="disburseRecipient"
-                >Địa chỉ ví đơn vị thụ hưởng / nhà cung cấp</label
-              >
-              <input
-                type="text"
-                id="disburseRecipient"
-                placeholder="0x..."
-                required
-              />
-            </div>
-            <div class="form-group">
-              <label for="disburseProof"
-                >Mã hash hóa đơn/chứng từ (IPFS hoặc link biên lai)</label
-              >
-              <input
-                type="text"
-                id="disburseProof"
-                placeholder="QmXoypizjW3WknFiJnKLwHCnL72vedxjQkDDP1mXWo6uco"
-                required
-              />
-            </div>
-            <button
-              type="submit"
-              id="btnSubmitDisburse"
-              class="btn btn-primary"
-              style="width: 100%"
-            >
-              Gửi Yêu Cầu Giải Ngân
-            </button>
-          </form>
-        </section>
-      </div>
+          </div>
 
-      <!-- 3. Form Thực Thi Giải Ngân (Duyệt chuyển tiền thực tế qua Smart Contract) -->
-      <section class="card">
-        <h2 style="font-size: 1.25rem; margin-bottom: 16px">
-          3. Phê Duyệt & Thực Thi Giải Ngân Quỹ
-        </h2>
-        <form
-          id="formExecuteDisbursement"
-          style="display: flex; gap: 16px; align-items: flex-end"
-        >
-          <div class="form-group" style="flex: 1; margin-bottom: 0">
-            <label for="execCampaignId">Mã chiến dịch (Campaign ID)</label>
-            <input
-              type="number"
-              id="execCampaignId"
-              min="0"
-              placeholder="Ví dụ: 0"
-              required
-            />
-          </div>
-          <div class="form-group" style="flex: 1; margin-bottom: 0">
-            <label for="execRequestId">Mã yêu cầu giải ngân (Request ID)</label>
-            <input
-              type="number"
-              id="execRequestId"
-              min="0"
-              placeholder="Ví dụ: 0"
-              required
-            />
-          </div>
-          <button
-            type="submit"
-            id="btnSubmitExec"
-            class="btn btn-primary"
-            style="height: 42px; padding: 0 24px"
-          >
-            Thực Thi Chuyển Tiền
-          </button>
-        </form>
+          <form id="formCreateCampaign" novalidate>
+            <!-- Tên chiến dịch + preview -->
+            <div class="form-group">
+              <label class="form-label" for="campaignTitle">
+                Tên chiến dịch <span class="label-required">*</span>
+              </label>
+              <input type="text" id="campaignTitle" class="form-control" placeholder="Ví dụ: Cứu trợ lũ lụt Miền Trung"
+                required />
+              <!-- Realtime preview -->
+              <div class="campaign-preview" id="campaignPreview">
+                <div class="preview-label">📋 Xem trước tên chiến dịch</div>
+                <div class="preview-name" id="previewName"></div>
+              </div>
+            </div>
+
+            <!-- Mô tả -->
+            <div class="form-group">
+              <label class="form-label" for="campaignDesc">
+                Mô tả hoàn cảnh & mục đích <span class="label-required">*</span>
+              </label>
+              <textarea id="campaignDesc" class="form-control" rows="3"
+                placeholder="Chi tiết mục đích kêu gọi, đối tượng thụ hưởng..." required></textarea>
+            </div>
+
+            <!-- Ảnh đại diện chiến dịch (Lưu Off-chain + Hash On-chain) -->
+            <div class="form-group">
+              <label class="form-label" for="campaignImage">
+                Ảnh đại diện chiến dịch <span class="label-required">*</span>
+                <span style="font-weight: normal; color: var(--text-muted); font-size: 0.75rem;">(Lưu Off-chain & băm
+                  SHA-256 On-chain)</span>
+              </label>
+              <input type="file" id="campaignImage" accept="image/*" class="form-control" required
+                style="padding: 8px 12px;" />
+              <span class="form-hint">Hỗ trợ JPG, PNG, WEBP (Tối đa 5MB). Mã băm SHA-256 sẽ được lưu lên Smart Contract
+                để chống tráo đổi ảnh.</span>
+
+              <!-- Khung xem trước ảnh đại diện -->
+              <div id="imagePreviewContainer"
+                style="display: none; margin-top: 10px; background: #f8fafc; border: 1.5px dashed #cbd5e1; border-radius: 10px; padding: 12px; align-items: center; gap: 14px;">
+                <img id="imagePreviewImg" src="" alt="Xem trước ảnh"
+                  style="width: 80px; height: 80px; object-fit: cover; border-radius: 8px; border: 1px solid #e2e8f0; flex-shrink: 0;" />
+                <div style="flex: 1; min-width: 0;">
+                  <div id="imagePreviewName"
+                    style="font-weight: 600; font-size: 0.85rem; color: #1e293b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                    --</div>
+                  <div id="imagePreviewSize" style="font-size: 0.75rem; color: #64748b; margin-top: 2px;">--</div>
+                  <div id="imagePreviewStatus"
+                    style="font-size: 0.72rem; color: #059669; font-weight: 600; margin-top: 4px;">✅ Đã sẵn sàng tính
+                    băm SHA-256 & tải lên</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <!-- Manager -->
+              <div class="form-group">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+                  <label class="form-label" for="campaignManager" style="margin-bottom:0;">
+                    Địa chỉ Trưởng ban quản lý <span class="label-required">*</span>
+                  </label>
+                  <label
+                    style="font-size: 0.75rem; color: var(--accent); cursor: pointer; display: flex; align-items: center; gap: 4px;">
+                    <input type="checkbox" id="chkUseCurrentWallet" checked style="width: auto; cursor: pointer;" />
+                    Dùng ví của tôi
+                  </label>
+                </div>
+                <input type="text" id="campaignManager" class="form-control" placeholder="0x..." readonly required />
+                <span class="form-hint" id="managerHint">Đã tự động điền địa chỉ ví đang kết nối của bạn.</span>
+              </div>
+
+              <!-- Target ETH -->
+              <div class="form-group">
+                <label class="form-label" for="campaignTarget">
+                  Mục tiêu kêu gọi (ETH) <span class="label-required">*</span>
+                </label>
+                <input type="number" id="campaignTarget" class="form-control" step="0.01" min="0.01"
+                  placeholder="Ví dụ: 2.5" required />
+              </div>
+            </div>
+
+            <div class="form-row">
+              <!-- Ngày kết thúc (Thay ô nhập số ngày) -->
+              <div class="form-group">
+                <label class="form-label" for="campaignDeadline">
+                  Ngày kết thúc nhận quyên góp <span class="label-required">*</span>
+                </label>
+                <input type="date" id="campaignDeadline" class="form-control" required />
+                <span class="form-hint" id="deadlineDaysHint">Tự động tính số ngày kết thúc trên Smart Contract.</span>
+                <input type="hidden" id="campaignDays" value="30" />
+              </div>
+
+              <!-- Tiền ký quỹ linh hoạt (Dynamic Stake: max(0.05 ETH, 2% Target)) -->
+              <div class="form-group">
+                <label class="form-label" for="calculatedStakeDisplay">
+                  Tiền ký quỹ cam kết (Dynamic Stake)
+                </label>
+                <input type="text" id="calculatedStakeDisplay" class="form-control" value="0.0500 ETH (Tối thiểu)"
+                  readonly style="background: #f8fafc; font-weight: 700; color: #059669;" />
+                <span class="form-hint" id="stakeRuleHint">Quy tắc: max(0.05 ETH, 2% mục tiêu). Hoàn trả 100% khi giải
+                  ngân!</span>
+              </div>
+            </div>
+
+            <!-- Submit -->
+            <button type="submit" id="btnSubmitCampaign" class="btn-submit">
+              🔒 Đặt Ký Quỹ & Tạo Chiến Dịch Lên Blockchain
+            </button>
+
+            <!-- Timeline -->
+            <div class="tx-timeline" id="timelineCreate">
+              <div class="timeline-title">Trạng thái giao dịch</div>
+              <div class="timeline-steps">
+                <div class="timeline-step" id="tCreate1">
+                  <div class="step-dot">1</div>
+                  <div class="step-label">Gửi TX</div>
+                </div>
+                <div class="timeline-step" id="tCreate2">
+                  <div class="step-dot">2</div>
+                  <div class="step-label">Chờ xác nhận</div>
+                </div>
+                <div class="timeline-step" id="tCreate3">
+                  <div class="step-dot">✓</div>
+                  <div class="step-label">Hoàn tất</div>
+                </div>
+              </div>
+            </div>
+          </form>
+        </div>
       </section>
-    </main>
 
-    <script src="js/config.js"></script>
-    <script src="js/admin.js"></script>
-  </body>
+      <!-- ── SECTION 2: Đề Xuất Giải Ngân ── -->
+      <section class="admin-card" id="section-disburse">
+        <div class="card-header">
+          <div class="card-icon card-icon-green">💸</div>
+          <div>
+            <div class="card-title">Tạo Đề Xuất Giải Ngân</div>
+            <div class="card-subtitle">Trưởng ban quản lý tạo đề xuất chi tiêu minh bạch kèm chứng từ</div>
+          </div>
+        </div>
+        <div class="card-body">
+          <form id="formRequestDisbursement" novalidate>
+            <div class="form-row">
+              <!-- Campaign ID -->
+              <div class="form-group">
+                <label class="form-label" for="disburseCampaignId">
+                  Mã chiến dịch (Campaign ID) <span class="label-required">*</span>
+                </label>
+                <input type="number" id="disburseCampaignId" class="form-control" min="0" placeholder="Ví dụ: 0"
+                  required />
+              </div>
+
+              <!-- Amount -->
+              <div class="form-group">
+                <label class="form-label" for="disburseAmount">
+                  Số tiền cần rút (ETH) <span class="label-required">*</span>
+                </label>
+                <input type="number" id="disburseAmount" class="form-control" step="any" min="0.0001"
+                  placeholder="Ví dụ: 0.5" required />
+              </div>
+            </div>
+
+            <!-- Purpose -->
+            <div class="form-group">
+              <label class="form-label" for="disbursePurpose">
+                Mục đích chi tiêu cụ thể <span class="label-required">*</span>
+              </label>
+              <input type="text" id="disbursePurpose" class="form-control"
+                placeholder="Ví dụ: Mua 500 thùng mì & nước ngọt" required />
+            </div>
+
+            <!-- Recipient -->
+            <div class="form-group">
+              <label class="form-label" for="disburseRecipient">
+                Địa chỉ ví đơn vị thụ hưởng / nhà cung cấp <span class="label-required">*</span>
+              </label>
+              <input type="text" id="disburseRecipient" class="form-control" placeholder="0x..." required />
+            </div>
+
+            <!-- Proof hash -->
+            <div class="form-group">
+              <label class="form-label" for="disburseProof">
+                Hash chứng từ (IPFS CID hoặc link biên lai) <span class="label-required">*</span>
+              </label>
+              <input type="text" id="disburseProof" class="form-control"
+                placeholder="QmXoypizjW3WknFiJnKLwHCnL72vedxjQkDDP1mXWo6uco" required />
+            </div>
+
+            <!-- File upload (IPFS-ready, visual only) -->
+            <div class="form-group">
+              <label class="form-label">
+                📎 Tải lên file chứng từ <span class="form-hint">(Dự kiến tích hợp IPFS)</span>
+              </label>
+              <div class="file-upload-wrapper">
+                <input type="file" id="disburseFileUpload" class="file-upload-input" accept=".pdf,.jpg,.jpeg,.png,.webp"
+                  onchange="handleFileSelect(this)" />
+                <div class="file-upload-label">
+                  <span class="upload-icon">📂</span>
+                  Chọn file hóa đơn / ảnh chứng từ (PDF, JPG, PNG)
+                </div>
+              </div>
+              <div id="fileNameDisplay"></div>
+            </div>
+
+            <button type="submit" id="btnSubmitDisburse" class="btn-submit">
+              💸 Gửi Yêu Cầu Giải Ngân
+            </button>
+
+            <!-- Timeline -->
+            <div class="tx-timeline" id="timelineDisburse">
+              <div class="timeline-title">Trạng thái giao dịch</div>
+              <div class="timeline-steps">
+                <div class="timeline-step" id="tDisburse1">
+                  <div class="step-dot">1</div>
+                  <div class="step-label">Gửi TX</div>
+                </div>
+                <div class="timeline-step" id="tDisburse2">
+                  <div class="step-dot">2</div>
+                  <div class="step-label">Chờ xác nhận</div>
+                </div>
+                <div class="timeline-step" id="tDisburse3">
+                  <div class="step-dot">✓</div>
+                  <div class="step-label">Hoàn tất</div>
+                </div>
+              </div>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <!-- ── SECTION 3: Thực Thi Giải Ngân ── -->
+      <section class="admin-card" id="section-execute">
+        <div class="card-header">
+          <div class="card-icon card-icon-red">✅</div>
+          <div>
+            <div class="card-title">Phê Duyệt & Thực Thi Giải Ngân</div>
+            <div class="card-subtitle">Admin phê duyệt và thực thi chuyển quỹ từ smart contract</div>
+          </div>
+        </div>
+        <div class="card-body">
+          <!-- Warning box -->
+          <div class="warning-box danger">
+            <div class="warning-icon">🚨</div>
+            <div>
+              <div class="warning-title">Hành động không thể hoàn tác!</div>
+              Sau khi thực thi, tiền sẽ được chuyển ngay lập tức đến ví thụ hưởng thông qua Smart Contract.
+              Hãy kiểm tra kỹ ID chiến dịch và ID yêu cầu giải ngân trước khi xác nhận.
+            </div>
+          </div>
+
+          <form id="formExecuteDisbursement" novalidate>
+            <div class="form-row">
+              <!-- Campaign ID -->
+              <div class="form-group">
+                <label class="form-label" for="execCampaignId">
+                  Mã chiến dịch (Campaign ID) <span class="label-required">*</span>
+                </label>
+                <input type="number" id="execCampaignId" class="form-control" min="0" placeholder="Ví dụ: 0" required />
+                <span class="form-hint">ID của chiến dịch muốn thực thi giải ngân</span>
+              </div>
+
+              <!-- Request ID -->
+              <div class="form-group">
+                <label class="form-label" for="execRequestId">
+                  Mã yêu cầu giải ngân (Request ID) <span class="label-required">*</span>
+                </label>
+                <input type="number" id="execRequestId" class="form-control" min="0" placeholder="Ví dụ: 0" required />
+                <span class="form-hint">ID của đề xuất giải ngân đã được tạo</span>
+              </div>
+            </div>
+
+            <button type="submit" id="btnSubmitExec" class="btn-submit btn-exec">
+              ✅ Xác Nhận & Thực Thi Chuyển Tiền
+            </button>
+
+            <!-- Timeline -->
+            <div class="tx-timeline" id="timelineExec">
+              <div class="timeline-title">Trạng thái giao dịch</div>
+              <div class="timeline-steps">
+                <div class="timeline-step" id="tExec1">
+                  <div class="step-dot">1</div>
+                  <div class="step-label">Gửi TX</div>
+                </div>
+                <div class="timeline-step" id="tExec2">
+                  <div class="step-dot">2</div>
+                  <div class="step-label">Chờ xác nhận</div>
+                </div>
+                <div class="timeline-step" id="tExec3">
+                  <div class="step-dot">✓</div>
+                  <div class="step-label">Hoàn tất</div>
+                </div>
+              </div>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <!-- ── SECTION 4: Quản Lý Ký Quỹ & Xử Phạt ── -->
+      <section class="admin-card" id="section-stake">
+        <div class="card-header">
+          <div class="card-icon" style="background: linear-gradient(135deg, #fef3c7, #fed7aa);">🛡️</div>
+          <div>
+            <div class="card-title">Quản Lý Ký Quỹ & Xử Phạt (Refund / Slashing)</div>
+            <div class="card-subtitle">Hoàn trả ký quỹ khi giải ngân minh bạch thành công, hoặc tịch thu cọc khi phát
+              hiện gian lận</div>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="form-row">
+            <div class="form-group" style="flex: 1;">
+              <label class="form-label" for="stakeCampaignId">Mã chiến dịch (Campaign ID) <span
+                  class="label-required">*</span></label>
+              <input type="number" id="stakeCampaignId" class="form-control" min="0" placeholder="Ví dụ: 0" />
+              <span class="form-hint">Nhập Campaign ID để rút cọc hoặc xử phạt</span>
+            </div>
+            <div class="form-group" style="flex: 2;">
+              <label class="form-label" for="slashReason">Lý do xử phạt (Chỉ dùng khi Slashing)</label>
+              <input type="text" id="slashReason" class="form-control"
+                placeholder="Ví dụ: Giả mạo hóa đơn hoặc không giải ngân đúng mục đích" />
+              <span class="form-hint">Ghi nhận minh bạch lý do vi phạm on-chain</span>
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 12px; margin-top: 14px; flex-wrap: wrap;">
+            <button type="button" id="btnRefundStake" class="btn"
+              style="background: #10b981; color: white; padding: 10px 20px; font-weight: 600; border-radius: 8px; border: none; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: opacity 0.2s;">
+              💰 Rút Lại Tiền Ký Quỹ (Refund Stake)
+            </button>
+            <button type="button" id="btnSlashStake" class="btn"
+              style="background: #ef4444; color: white; padding: 10px 20px; font-weight: 600; border-radius: 8px; border: none; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: opacity 0.2s;">
+              ⚠️ Tịch Thu Ký Quỹ Do Vi Phạm (Slash Stake - Admin)
+            </button>
+          </div>
+        </div>
+      </section>
+
+    </div><!-- /admin-content -->
+  </div><!-- /admin-main -->
+
+  <!-- ═══════════════════════════════════
+         TOAST CONTAINER
+    ════════════════════════════════════ -->
+  <div id="toastContainer"></div>
+
+  <!-- ═══════════════════════════════════
+         LOADING OVERLAY
+    ════════════════════════════════════ -->
+  <div id="loadingOverlay">
+    <div class="loading-box">
+      <div class="spinner"></div>
+      <div class="loading-title" id="loadingTitle">Đang xử lý giao dịch…</div>
+      <div class="loading-sub" id="loadingSub">Vui lòng xác nhận trong MetaMask</div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════
+         ADMIN UI HELPERS (inline)
+    ════════════════════════════════════ -->
+  <script>
+    /* ── Toast system: Sử dụng showToast chuẩn từ web3-common.js ── */
+
+    /* ── Loading overlay ── */
+    function showLoading(title = 'Đang xử lý giao dịch…', sub = 'Vui lòng xác nhận trong MetaMask') {
+      const titleEl = document.getElementById('loadingTitle');
+      const subEl = document.getElementById('loadingSub');
+      const overlay = document.getElementById('loadingOverlay');
+      if (titleEl) titleEl.textContent = title;
+      if (subEl) subEl.textContent = sub;
+      if (overlay) overlay.classList.add('visible');
+    }
+    function hideLoading() {
+      const overlay = document.getElementById('loadingOverlay');
+      if (overlay) overlay.classList.remove('visible');
+    }
+    function setTxLoading(loading, title, sub) {
+      if (loading) {
+        showLoading(title, sub);
+      } else {
+        hideLoading();
+      }
+    }
+    window.showLoading = showLoading;
+    window.hideLoading = hideLoading;
+    window.setTxLoading = setTxLoading;
+
+    /* ── Timeline helpers ── */
+    const timelineMap = {
+      timelineCreate: { tlId: 'timelineCreate', prefix: 'tCreate' },
+      tCreate: { tlId: 'timelineCreate', prefix: 'tCreate' },
+      timelineDisburse: { tlId: 'timelineDisburse', prefix: 'tDisburse' },
+      tDisburse: { tlId: 'timelineDisburse', prefix: 'tDisburse' },
+      timelineExec: { tlId: 'timelineExec', prefix: 'tExec' },
+      tExec: { tlId: 'timelineExec', prefix: 'tExec' }
+    };
+
+    function activateStep(key, step) {
+      const item = timelineMap[key] || { tlId: key, prefix: key };
+      const tl = document.getElementById(item.tlId);
+      if (tl) tl.classList.add('visible');
+      for (let i = 1; i <= 3; i++) {
+        const el = document.getElementById(`${item.prefix}${i}`);
+        if (!el) continue;
+        if (i < step) { el.classList.add('done'); el.classList.remove('active'); }
+        if (i === step) { el.classList.add('active'); el.classList.remove('done'); }
+        if (i > step) { el.classList.remove('active', 'done'); }
+      }
+    }
+    function resetTimeline(key) {
+      const item = timelineMap[key] || { tlId: key, prefix: key };
+      for (let i = 1; i <= 3; i++) {
+        const el = document.getElementById(`${item.prefix}${i}`);
+        if (el) { el.classList.remove('active', 'done'); }
+      }
+      const tl = document.getElementById(item.tlId);
+      if (tl) tl.classList.remove('visible');
+    }
+    window.resetTimeline = resetTimeline;
+    window.activateStep = activateStep;
+    window.updateTimeline = activateStep;
+
+    /* ── Campaign title preview ── */
+    document.addEventListener('DOMContentLoaded', () => {
+      const titleInput = document.getElementById('campaignTitle');
+      const preview = document.getElementById('campaignPreview');
+      const previewName = document.getElementById('previewName');
+      if (titleInput) {
+        titleInput.addEventListener('input', () => {
+          const val = titleInput.value.trim();
+          if (val) {
+            previewName.textContent = val;
+            preview.classList.add('visible');
+          } else {
+            preview.classList.remove('visible');
+          }
+        });
+      }
+
+      /* ── Sync walletAddress to sidebar ── */
+      const walletEl = document.getElementById('walletAddress');
+      if (walletEl) {
+        new MutationObserver(() => {
+          const addr = walletEl.textContent.trim();
+          const sidebarAddr = document.getElementById('sidebarWalletAddr');
+          if (sidebarAddr) sidebarAddr.textContent = addr;
+        }).observe(walletEl, { characterData: true, childList: true, subtree: true });
+      }
+
+      /* ── Highlight active nav on scroll ── */
+      const sections = [
+        { id: 'section-create', nav: 'navCreate' },
+        { id: 'section-disburse', nav: 'navDisburse' },
+        { id: 'section-execute', nav: 'navExecute' },
+      ];
+      const observer = new IntersectionObserver(entries => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            sections.forEach(s => {
+              const btn = document.getElementById(s.nav);
+              if (btn) btn.classList.toggle('active', s.id === entry.target.id);
+            });
+          }
+        });
+      }, { threshold: 0.4 });
+      sections.forEach(s => {
+        const el = document.getElementById(s.id);
+        if (el) observer.observe(el);
+      });
+    });
+
+    /* ── File select display ── */
+    function handleFileSelect(input) {
+      const display = document.getElementById('fileNameDisplay');
+      if (input.files && input.files[0]) {
+        display.textContent = '📄 ' + input.files[0].name;
+      } else {
+        display.textContent = '';
+      }
+    }
+    window.handleFileSelect = handleFileSelect;
+
+    /* ── Sidebar ── */
+    function scrollToSection(id) {
+      const el = document.getElementById(id);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      closeSidebar();
+    }
+    function toggleSidebar() {
+      const sb = document.getElementById('adminSidebar');
+      const ov = document.getElementById('sidebarOverlay');
+      sb.classList.toggle('open');
+      ov.style.display = sb.classList.contains('open') ? 'block' : 'none';
+    }
+    function closeSidebar() {
+      document.getElementById('adminSidebar').classList.remove('open');
+      document.getElementById('sidebarOverlay').style.display = 'none';
+    }
+    window.scrollToSection = scrollToSection;
+    window.toggleSidebar = toggleSidebar;
+    window.closeSidebar = closeSidebar;
+  </script>
+
+  <script src="js/config.js"></script>
+  <script src="js/web3-common.js"></script>
+  <script src="js/admin.js"></script>
+</body>
+
 </html>

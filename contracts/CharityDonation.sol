@@ -3,56 +3,118 @@ pragma solidity ^0.8.20;
 
 /**
  * @title CharityDonation
- * @dev He thong quan ly va theo doi quyen gop tu thien minh bach bang Smart Contract
+ * @dev Hệ thống quản lý và theo dõi quyên góp từ thiện minh bạch bằng Smart Contract.
+ * Kiến trúc: Phi tập trung có ký quỹ linh hoạt theo tỷ lệ (Dynamic Stake: max(0.05 ETH, 2% target))
+ * kết hợp dấu vân tay ảnh On-chain (SHA-256) và cơ chế Hoàn tiền (Refund) / Tịch thu cọc (Slashing).
  */
 contract CharityDonation {
-    // 1. Cau truc mot khoan quyen gop (Luu vet lich su tren chuoi)
+    // 1. Cấu trúc một khoản quyên góp (Lưu vết lịch sử trên chuỗi)
     struct DonationRecord {
-        address donor;          // Dia chi vi nguoi dong gop
-        uint256 amount;         // So tien quyen gop (tinh bang Wei)
-        uint256 timestamp;      // Thoi diem dong gop
-        string message;         // Loi nhan dong vien
+        address donor;          // Địa chỉ ví người đóng góp
+        uint256 amount;         // Số tiền quyên góp (tính bằng Wei)
+        uint256 timestamp;      // Thời điểm đóng góp
+        string message;         // Lời nhắn động viên
     }
 
-    // 2. Cau truc mot yeu cau giai ngan (Minh bach dau ra cua dong tien)
+    // 2. Cấu trúc một yêu cầu giải ngân (Minh bạch đầu ra của dòng tiền)
     struct DisbursementRequest {
         uint256 id;
-        string purpose;         // Muc dich su dung tien (vi du: Mua gao, sua chua truong hoc)
-        uint256 amount;         // So tien yeu cau rut
-        address payable recipient; // Dia chi vi nguoi / don vi thu huong thuc te
-        string proofHash;       // Ma hash hoa don / chung tu (IPFS hash hoac SHA-256)
-        bool isExecuted;        // Trang thai da duoc giai ngan chua
-        uint256 executedAt;     // Thoi gian thuc hien chuyen tien
+        string purpose;         // Mục đích sử dụng tiền (mua gạo, vật tư cứu trợ)
+        uint256 amount;         // Số tiền yêu cầu rút
+        address payable recipient; // Địa chỉ ví người / đơn vị thụ hưởng thực tế
+        string proofHash;       // Mã hash hóa đơn / chứng từ (IPFS CID)
+        bool isExecuted;        // Trạng thái đã được giải ngân chưa
+        uint256 executedAt;     // Thời gian thực hiện chuyển tiền
     }
 
-    // 3. Cau truc mot chien dich tu thien
+    // 3. Cấu trúc một chiến dịch từ thiện
     struct Campaign {
         uint256 id;
-        string title;           // Ten chien dich
-        string description;     // Mo ta hoan canh
-        address payable manager;// Nguoi quan ly / to chuc chu tri chien dich
-        uint256 targetAmount;   // Muc tieu quyen gop (Wei)
-        uint256 raisedAmount;   // So tien da van dong duoc
-        uint256 disbursedAmount;// So tien da giai ngan thuc te
-        uint256 deadline;       // Thoi han ket thuc chien dich
-        bool isClosed;          // Trang thai dong / mo chien dich
+        string title;           // Tên chiến dịch
+        string description;     // Mô tả hoàn cảnh
+        address payable manager;// Người quản lý / tổ chức chủ trì chiến dịch
+        uint256 targetAmount;   // Mục tiêu quyên góp (Wei)
+        uint256 raisedAmount;   // Số tiền đã vận động được
+        uint256 disbursedAmount;// Số tiền đã giải ngân thực tế
+        uint256 deadline;       // Thời hạn kết thúc chiến dịch
+        bool isClosed;          // Trạng thái đóng / mở chiến dịch
+        address payable creator;// Người tạo chiến dịch / người nộp tiền ký quỹ
+        uint256 stakeAmount;    // Số tiền ký quỹ cam kết (Dynamic Stake)
+        bool stakeRefunded;     // Trạng thái đã hoàn trả ký quỹ hay chưa
+        bool stakeSlashed;      // Trạng thái bị tịch thu ký quỹ do vi phạm
+        string imageHash;       // Mã băm SHA-256 của ảnh đại diện lưu Off-chain
+        bool isCancelled;       // Trạng thái chiến dịch bị hủy bỏ hoặc vi phạm
     }
 
     address public systemAdmin;
     uint256 public campaignCount;
 
-    // Mapping luu tru du lieu
-    mapping(uint256 => Campaign) public campaigns;
+    // Mức ký quỹ tối thiểu: 0.05 ETH
+    uint256 public constant MIN_STAKE_FEE = 0.05 ether;
+    // Tỷ lệ ký quỹ theo mục tiêu kêu gọi: 2%
+    uint256 public constant STAKE_PERCENTAGE = 2;
+
+    // Tổng số tiền ký quỹ bị tịch thu (slashed) giữ trong quỹ chung
+    uint256 public totalSlashedFunds;
+
+    // Mapping lưu trữ dữ liệu chiến dịch (Đặt private để tránh Stack too deep khi sinh tự động getter cho struct 15 trường)
+    mapping(uint256 => Campaign) private allCampaigns;
+
+    /**
+     * @dev Getter đọc dữ liệu chiến dịch theo ID (Trả về struct Campaign memory, tương thích 100% với Frontend)
+     */
+    function campaigns(uint256 _campaignId) external view returns (Campaign memory) {
+        return allCampaigns[_campaignId];
+    }
+
     mapping(uint256 => DonationRecord[]) private campaignDonations;
     mapping(uint256 => DisbursementRequest[]) private campaignDisbursements;
+    
+    // Ánh xạ lưu số tiền từng nhà hảo tâm đã đóng góp cho từng chiến dịch
+    mapping(uint256 => mapping(address => uint256)) public donations;
     mapping(uint256 => mapping(address => uint256)) public donorTotalContributions;
 
-    // Cac su kien (Events) giup Frontend lang nghe va lap so cai kiem toan minh bach
-    event CampaignCreated(uint256 indexed campaignId, string title, address indexed manager, uint256 targetAmount, uint256 deadline);
-    event DonationReceived(uint256 indexed campaignId, address indexed donor, uint256 amount, bytes32 indexed txProof, uint256 timestamp);
-    event DisbursementRequested(uint256 indexed campaignId, uint256 indexed requestId, uint256 amount, string purpose, address recipient);
-    event FundsDisbursed(uint256 indexed campaignId, uint256 indexed requestId, uint256 amount, address recipient, string proofHash, uint256 timestamp);
+    // Các sự kiện (Events)
+    event CampaignCreated(
+        uint256 indexed campaignId,
+        string title,
+        address indexed manager,
+        uint256 targetAmount,
+        uint256 deadline,
+        address indexed creator,
+        uint256 stakeAmount,
+        string imageHash
+    );
+    event DonationReceived(
+        uint256 indexed campaignId,
+        address indexed donor,
+        uint256 amount,
+        bytes32 indexed txProof,
+        uint256 timestamp
+    );
+    event DisbursementRequested(
+        uint256 indexed campaignId,
+        uint256 indexed requestId,
+        uint256 amount,
+        string purpose,
+        address recipient
+    );
+    event FundsDisbursed(
+        uint256 indexed campaignId,
+        uint256 indexed requestId,
+        uint256 amount,
+        address recipient,
+        string proofHash,
+        uint256 timestamp
+    );
     event CampaignStatusUpdated(uint256 indexed campaignId, bool isClosed);
+    event CampaignCancelled(uint256 indexed campaignId, string reason);
+    event DonationRefunded(uint256 indexed campaignId, address indexed donor, uint256 amount);
+
+    // Events dành cho cơ chế Ký quỹ & Xử phạt
+    event StakeRefunded(uint256 indexed campaignId, address indexed creator, uint256 amount);
+    event StakeSlashed(uint256 indexed campaignId, address indexed creator, uint256 amount, string reason);
+    event SlashedFundsWithdrawn(address indexed admin, uint256 amount);
 
     modifier onlyAdmin() {
         require(msg.sender == systemAdmin, "Loi: Chi Admin he thong moi co quyen");
@@ -60,7 +122,7 @@ contract CharityDonation {
     }
 
     modifier onlyManager(uint256 _campaignId) {
-        require(msg.sender == campaigns[_campaignId].manager, "Loi: Chi quan ly chien dich moi co quyen");
+        require(msg.sender == allCampaigns[_campaignId].manager, "Loi: Chi quan ly chien dich moi co quyen");
         _;
     }
 
@@ -74,52 +136,78 @@ contract CharityDonation {
     }
 
     /**
-     * @dev 1. Tao mot chien dich tu thien moi
+     * @dev Tính toán mức ký quỹ bắt buộc (Dynamic Stake):
+     * max(0.05 ether, 2% của _targetAmount).
+     */
+    function calculateRequiredStake(uint256 _targetAmount) public pure returns (uint256) {
+        uint256 percentStake = (_targetAmount * STAKE_PERCENTAGE) / 100;
+        return percentStake > MIN_STAKE_FEE ? percentStake : MIN_STAKE_FEE;
+    }
+
+    /**
+     * @dev 1. Khởi tạo chiến dịch mới (Permissionless có ký quỹ theo tỷ lệ & lưu mã băm ảnh)
+     * Gỡ bỏ hoàn toàn `onlyAdmin`: Bất kỳ ai cũng có thể tạo chiến dịch,
+     * bắt buộc đặt cọc tối thiểu max(0.05 ETH, 2% target) và cung cấp _imageHash.
      */
     function createCampaign(
         string memory _title,
         string memory _description,
         address payable _manager,
         uint256 _targetAmount,
-        uint256 _durationInDays
-    ) external onlyAdmin returns (uint256) {
-        require(_targetAmount > 0, "Muc tieu quyen gop phai lon hon 0");
-        require(_durationInDays > 0, "Thoi han quyen gop phai lon hon 0");
-        require(_manager != address(0), "Dia chi quan ly khong hop le");
+        uint256 _durationInDays,
+        string memory _imageHash
+    ) external payable returns (uint256) {
+        require(_targetAmount > 0, "Loi: Muc tieu quyen gop phai lon hon 0");
+        require(_durationInDays > 0, "Loi: Thoi han quyen gop phai lon hon 0");
+        require(_manager != address(0), "Loi: Dia chi quan ly khong hop le");
+        require(bytes(_title).length > 0, "Loi: Ten chien dich khong duoc de trong");
+        require(msg.value >= calculateRequiredStake(_targetAmount), "Loi: Tien ky quy khong du (Toi thieu 0.05 ETH hoac 2% muc tieu)");
 
         uint256 newId = campaignCount;
-        uint256 deadline = block.timestamp + (_durationInDays * 1 days);
+        Campaign storage c = allCampaigns[newId];
+        c.id = newId;
+        c.title = _title;
+        c.description = _description;
+        c.manager = _manager;
+        c.targetAmount = _targetAmount;
+        c.deadline = block.timestamp + (_durationInDays * 1 days);
+        c.creator = payable(msg.sender);
+        c.stakeAmount = msg.value;
+        c.imageHash = _imageHash;
 
-        campaigns[newId] = Campaign({
-            id: newId,
-            title: _title,
-            description: _description,
-            manager: _manager,
-            targetAmount: _targetAmount,
-            raisedAmount: 0,
-            disbursedAmount: 0,
-            deadline: deadline,
-            isClosed: false
-        });
+        campaignCount = newId + 1;
 
-        campaignCount++;
-        emit CampaignCreated(newId, _title, _manager, _targetAmount, deadline);
+        emit CampaignCreated(
+            newId,
+            _title,
+            _manager,
+            _targetAmount,
+            c.deadline,
+            msg.sender,
+            msg.value,
+            _imageHash
+        );
+
         return newId;
     }
 
     /**
-     * @dev 2. Quyen gop tien vao chien dich (Co the gui kem coin goc ETH/MATIC)
+     * @dev 2. Quyên góp tiền vào chiến dịch (ETH)
+     * Toàn bộ ETH được khóa an toàn tại hợp đồng, ghi nhận số tiền từng donor.
      */
     function donate(uint256 _campaignId, string memory _message) external payable campaignExists(_campaignId) {
-        Campaign storage c = campaigns[_campaignId];
+        Campaign storage c = allCampaigns[_campaignId];
         require(!c.isClosed, "Chien dich da dong tiep nhan");
+        require(!c.isCancelled, "Chien dich da bi huy bo do vi pham");
         require(block.timestamp <= c.deadline, "Chien dich da het han quyen gop");
         require(msg.value > 0, "So tien quyen gop phai lon hon 0");
+        require(!c.stakeSlashed, "Chien dich da bi khoa do vi pham ky quy");
 
         c.raisedAmount += msg.value;
+        donations[_campaignId][msg.sender] += msg.value;
         donorTotalContributions[_campaignId][msg.sender] += msg.value;
 
-        // Ghi nhan lich su quyen gop
+        // Ghi nhận lịch sử quyên góp
         campaignDonations[_campaignId].push(DonationRecord({
             donor: msg.sender,
             amount: msg.value,
@@ -127,13 +215,12 @@ contract CharityDonation {
             message: _message
         }));
 
-        // Sinh ma bam chung thuc (proof hash) cho giao dich quyen gop
         bytes32 txProof = keccak256(abi.encodePacked(msg.sender, _campaignId, msg.value, block.timestamp));
         emit DonationReceived(_campaignId, msg.sender, msg.value, txProof, block.timestamp);
     }
 
     /**
-     * @dev 3. Nguoi quan ly tao de xuat giai ngan kem chung tu minh bach
+     * @dev 3. Người quản lý tạo đề xuất giải ngân kèm chứng từ minh bạch (IPFS CID)
      */
     function requestDisbursement(
         uint256 _campaignId,
@@ -142,7 +229,9 @@ contract CharityDonation {
         address payable _recipient,
         string memory _proofHash
     ) external campaignExists(_campaignId) onlyManager(_campaignId) returns (uint256) {
-        Campaign storage c = campaigns[_campaignId];
+        Campaign storage c = allCampaigns[_campaignId];
+        require(!c.isCancelled, "Chien dich da bi huy");
+        require(!c.stakeSlashed, "Chien dich da bi dinh chi do vi pham gian lan");
         require(_recipient != address(0), "Dia chi nguoi thu huong khong hop le");
         require(_amount > 0, "So tien giai ngan phai lon hon 0");
         require((c.raisedAmount - c.disbursedAmount) >= _amount, "So du quy khong du de giai ngan");
@@ -163,13 +252,17 @@ contract CharityDonation {
     }
 
     /**
-     * @dev 4. Phe duyet va thuc hien chuyen tien giai ngan
+     * @dev 4. Phê duyệt và thực hiện chuyển tiền giải ngân On-chain.
+     * Tiền chỉ chuyển trực tiếp tới đơn vị thụ hưởng (recipient).
+     * Khi có đợt giải ngân hợp lệ đầu tiên, tiền ký quỹ (stakeAmount) tự động hoàn lại cho creator.
      */
     function executeDisbursement(
         uint256 _campaignId,
         uint256 _requestId
     ) external campaignExists(_campaignId) onlyAdmin {
-        Campaign storage c = campaigns[_campaignId];
+        Campaign storage c = allCampaigns[_campaignId];
+        require(!c.isCancelled, "Chien dich da bi huy");
+        require(!c.stakeSlashed, "Chien dich da bi khoa do vi pham ky quy");
         require(_requestId < campaignDisbursements[_campaignId].length, "Yeu cau khong ton tai");
 
         DisbursementRequest storage req = campaignDisbursements[_campaignId][_requestId];
@@ -180,39 +273,143 @@ contract CharityDonation {
         req.executedAt = block.timestamp;
         c.disbursedAmount += req.amount;
 
-        // Chuyen tien truc tiep den nguoi/don vi thu huong
+        // Chuyển tiền trực tiếp đến người/đơn vị thụ hưởng
         (bool success, ) = req.recipient.call{value: req.amount}("");
         require(success, "Giao dich chuyen tien that bai");
 
         emit FundsDisbursed(_campaignId, _requestId, req.amount, req.recipient, req.proofHash, block.timestamp);
+
+        // Tự động hoàn trả tiền ký quỹ cho Creator ngay khi có đợt giải ngân minh bạch đầu tiên
+        if (c.stakeAmount > 0 && !c.stakeRefunded && !c.stakeSlashed) {
+            c.stakeRefunded = true;
+            uint256 refundVal = c.stakeAmount;
+            (bool refundSuccess, ) = c.creator.call{value: refundVal}("");
+            if (refundSuccess) {
+                emit StakeRefunded(_campaignId, c.creator, refundVal);
+            }
+        }
     }
 
     /**
-     * @dev 5. Dong hoac mo lai chien dich
+     * @dev 5. Cơ chế Đánh dấu vi phạm / Hủy bỏ chiến dịch & Tịch thu cọc (cancelOrSlashCampaign)
+     * Admin phát hiện gian lận hoặc vi phạm nghiêm trọng:
+     * - Tịch thu toàn bộ tiền ký quỹ (stakeAmount) vào quỹ chung.
+     * - Khóa chiến dịch và mở cờ isCancelled = true.
+     * - Cho phép các donor gọi claimRefund rút lại 100% tiền đã ủng hộ.
+     */
+    function cancelOrSlashCampaign(uint256 _campaignId, string memory _reason) external campaignExists(_campaignId) onlyAdmin {
+        Campaign storage c = allCampaigns[_campaignId];
+        require(!c.isCancelled, "Chien dich da bi huy truoc do");
+
+        c.isCancelled = true;
+        c.isClosed = true;
+
+        // Tịch thu tiền ký quỹ nếu chưa được hoàn trả
+        if (c.stakeAmount > 0 && !c.stakeRefunded && !c.stakeSlashed) {
+            c.stakeSlashed = true;
+            totalSlashedFunds += c.stakeAmount;
+            emit StakeSlashed(_campaignId, c.creator, c.stakeAmount, _reason);
+        }
+
+        emit CampaignCancelled(_campaignId, _reason);
+        emit CampaignStatusUpdated(_campaignId, true);
+    }
+
+    /**
+     * @dev 6. Cơ chế Hoàn tiền cho Nhà hảo tâm (claimRefund)
+     * Được kích hoạt khi:
+     * (1) Chiến dịch bị hủy bỏ/vi phạm (isCancelled == true)
+     * HOẶC
+     * (2) Chiến dịch quá hạn (block.timestamp > deadline) mà chưa đạt mục tiêu (raisedAmount < targetAmount).
+     * Áp dụng mô hình Checks-Effects-Interactions bảo vệ chống Reentrancy.
+     */
+    function claimRefund(uint256 _campaignId) external campaignExists(_campaignId) {
+        Campaign storage c = allCampaigns[_campaignId];
+        
+        bool eligibleForRefund = c.isCancelled || (block.timestamp > c.deadline && c.raisedAmount < c.targetAmount);
+        require(eligibleForRefund, "Chien dich chua du dieu kien hoan tra tien cho nha hao tam");
+
+        uint256 contributed = donations[_campaignId][msg.sender];
+        require(contributed > 0, "Ban khong co so du quyen gop de rut lai trong chien dich nay");
+
+        // Effects
+        donations[_campaignId][msg.sender] = 0;
+        if (c.raisedAmount >= contributed) {
+            c.raisedAmount -= contributed;
+        } else {
+            c.raisedAmount = 0;
+        }
+
+        // Interactions
+        (bool success, ) = payable(msg.sender).call{value: contributed}("");
+        require(success, "Giao dich rut lai tien quyen gop that bai");
+
+        emit DonationRefunded(_campaignId, msg.sender, contributed);
+    }
+
+    /**
+     * @dev 7. Rút lại tiền ký quỹ độc lập cho Creator (refundStake)
+     */
+    function refundStake(uint256 _campaignId) external campaignExists(_campaignId) {
+        Campaign storage c = allCampaigns[_campaignId];
+        require(msg.sender == c.creator || msg.sender == systemAdmin, "Loi: Khong co quyen yeu cau hoan ky quy");
+        require(!c.stakeRefunded, "Loi: Tien ky quy da duoc hoan tra");
+        require(!c.stakeSlashed, "Loi: Tien ky quy da bi tich thu do vi pham");
+        require(!c.isCancelled, "Loi: Chien dich da bi huy do vi pham");
+        require(c.stakeAmount > 0, "Loi: Khong co khoan ky quy kha dung");
+        require(c.disbursedAmount > 0, "Loi: Chien dich chua co dot giai ngan minh bach nao");
+
+        c.stakeRefunded = true;
+        uint256 refundVal = c.stakeAmount;
+
+        (bool success, ) = c.creator.call{value: refundVal}("");
+        require(success, "Loi: Chuyen tien hoan ky quy that bai");
+
+        emit StakeRefunded(_campaignId, c.creator, refundVal);
+    }
+
+    /**
+     * @dev 8. Rút số tiền ký quỹ đã bị tịch thu để đưa vào quỹ cộng đồng / hỗ trợ nạn nhân
+     */
+    function withdrawSlashedFunds(address payable _to) external onlyAdmin {
+        require(_to != address(0), "Dia chi nhan khong hop le");
+        require(totalSlashedFunds > 0, "Khong co quy tich thu de rut");
+
+        uint256 amount = totalSlashedFunds;
+        totalSlashedFunds = 0;
+
+        (bool success, ) = _to.call{value: amount}("");
+        require(success, "Rut quy that bai");
+
+        emit SlashedFundsWithdrawn(_to, amount);
+    }
+
+    /**
+     * @dev 9. Đóng hoặc mở lại chiến dịch
      */
     function toggleCampaignStatus(uint256 _campaignId, bool _isClosed) external campaignExists(_campaignId) onlyAdmin {
-        campaigns[_campaignId].isClosed = _isClosed;
+        allCampaigns[_campaignId].isClosed = _isClosed;
         emit CampaignStatusUpdated(_campaignId, _isClosed);
     }
 
     /**
-     * @dev 6. Lay danh sach toan bo lich su quyen gop phuc vu sao ke thoi gian thuc
+     * @dev 10. Lấy danh sách toàn bộ lịch sử quyên góp phục vụ sao kê thời gian thực
      */
     function getDonationHistory(uint256 _campaignId) external view campaignExists(_campaignId) returns (DonationRecord[] memory) {
         return campaignDonations[_campaignId];
     }
 
     /**
-     * @dev 7. Lay toan bo danh sach cac dot giai ngan kem hash chung tu
+     * @dev 11. Lấy toàn bộ danh sách các đợt giải ngân kèm hash chứng từ
      */
     function getDisbursementHistory(uint256 _campaignId) external view campaignExists(_campaignId) returns (DisbursementRequest[] memory) {
         return campaignDisbursements[_campaignId];
     }
 
     /**
-     * @dev 8. Lay so du con lai cua mot chien dich
+     * @dev 12. Lấy số dư còn lại của một chiến dịch
      */
     function getRemainingFunds(uint256 _campaignId) external view campaignExists(_campaignId) returns (uint256) {
-        return campaigns[_campaignId].raisedAmount - campaigns[_campaignId].disbursedAmount;
+        return allCampaigns[_campaignId].raisedAmount - allCampaigns[_campaignId].disbursedAmount;
     }
 }

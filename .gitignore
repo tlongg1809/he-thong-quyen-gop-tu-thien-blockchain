@@ -3,3 +3,5 @@
 .vscode/
 artifacts/
 cache/
+uploads/campaigns/*
+!uploads/campaigns/.gitkeep

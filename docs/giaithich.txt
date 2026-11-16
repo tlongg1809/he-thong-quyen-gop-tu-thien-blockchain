@@ -1,0 +1,367 @@
+========================================================================================
+  LUẬN GIẢI KIẾN TRÚC & CƠ SỞ KHOA HỌC: MÔ HÌNH PHI TẬP TRUNG CÓ KÝ QUỸ LINH HOẠT
+  (DYNAMIC STAKE), LƯU TRỮ ẢNH HYBRID & CƠ CHẾ BẢO VỆ NHÀ HẢO TÂM (DONOR REFUND)
+  Dự án: Hệ Thống Quyên Góp Từ Thiện Minh Bạch Bằng Smart Contract (CharityChain)
+  Nhánh Git: feature/audit-offchain-docs
+  Tác giả / Nhóm nghiên cứu đồ án: CharityChain Team
+  Thời gian cập nhật: 15/11/2026
+========================================================================================
+
+MỤC LỤC:
+1. ĐẶT VẤN ĐỀ: NGHỊCH LÝ TẬP TRUNG & NGUY CƠ BỎ CỌC NHỎ TRỤC LỢI LỚN
+2. NGUYÊN LÝ THIẾT KẾ KÝ QUỸ LINH HOẠT THEO TỶ LỆ (DYNAMIC STAKE-BASED MODEL)
+3. CƠ CHẾ BẢO VỆ NHÀ HẢO TÂM & HOÀN TIỀN TỰ CHỦ (DONOR CLAIM REFUND)
+4. KIẾN TRÚC HYBRID: LƯU ẢNH OFF-CHAIN & ĐỐI SOÁT TOÀN VẸN SHA-256 ON-CHAIN
+5. SO SÁNH ĐỐI CHIẾU VỚI MÔ HÌNH DAO VÀ VÍ ĐA CHỮ KÝ (MULTI-SIG)
+6. BÁO CÁO KẾT QUẢ KIỂM THỬ HỆ THỐNG (TESTING & VERIFICATION REPORT)
+7. HƯỚNG DẪN CHI TIẾT CÁC BƯỚC THỰC HIỆN NGHIỆP VỤ TRÊN THỰC TẾ
+8. BÁO CÁO KIỂM THỬ END-TO-END (4 TEST CASES) & KHẮC PHỤC LỖI TOAST REQUIRE(FALSE)
+9. BẢNG PHÂN CÔNG NHIỆM VỤ CHI TIẾT & ĐÓNG GÓP TỪNG THÀNH VIÊN THEO NHÁNH GIT
+
+========================================================================================
+1. ĐẶT VẤN ĐỀ: NGHỊCH LÝ TẬP TRUNG & NGUY CƠ BỎ CỌC NHỎ TRỤC LỢI LỚN
+========================================================================================
+
+1.1. Nghịch lý tập trung (`onlyAdmin`) trong Smart Contract truyền thống:
+- Khi khởi tạo chiến dịch bị khóa bởi modifier `onlyAdmin`, toàn bộ hệ thống rơi vào
+  điểm nghẽn đơn lẻ (Single Point of Failure - SPoF) và rủi ro kiểm duyệt (Censorship).
+- Nếu người quản trị vắng mặt hoặc gặp sự cố lộ Private Key, không ai có thể khởi tạo
+  chiến dịch cứu trợ khẩn cấp, vi phạm triết lý mở của Web3 (Permissionless).
+
+1.2. Hạn chế của mức Ký Quỹ Cố Định (Fixed Stake Flaw):
+- Nếu chỉ áp dụng mức cọc cố định (ví dụ phẳng 0.05 ETH cho mọi chiến dịch): Kẻ gian sẵn sàng
+  chấp nhận mất 0.05 ETH (khoảng $150) để tạo một chiến dịch kêu gọi mục tiêu 50 ETH - 100 ETH
+  (hàng trăm nghìn USD). Tỷ lệ Rủi ro / Lợi nhuận (Risk-Reward Ratio) quá chênh lệch khiến
+  rào cản kinh tế bị vô hiệu hóa trước các chiến dịch lừa đảo quy mô lớn.
+
+========================================================================================
+2. NGUYÊN LÝ THIẾT KẾ KÝ QUỸ LINH HOẠT THEO TỶ LỆ (DYNAMIC STAKE-BASED MODEL)
+========================================================================================
+
+2.1. Công thức toán học Dynamic Stake:
+Hệ thống áp dụng hàm xác định mức ký quỹ linh hoạt:
+  `requiredStake = max(MIN_STAKE_FEE, targetAmount * STAKE_PERCENTAGE / 100)`
+Trong đó:
+- `MIN_STAKE_FEE = 0.05 ether`: Mức cọc sàn đảm bảo chống spam chiến dịch rác nhỏ.
+- `STAKE_PERCENTAGE = 2%`: Tỷ lệ ký quỹ tỷ lệ thuận với mục tiêu kêu gọi.
+
+* Ý nghĩa kinh tế học:
+- Mục tiêu 1 ETH: Ký quỹ = max(0.05, 0.02) = 0.05 ETH.
+- Mục tiêu 10 ETH: Ký quỹ = max(0.05, 0.20) = 0.20 ETH.
+- Mục tiêu 100 ETH: Ký quỹ = max(0.05, 2.00) = 2.00 ETH.
+=> Kẻ xấu muốn huy động số tiền càng lớn thì càng phải thế chấp khoản tiền cọc tương xứng.
+Nếu vi phạm, hình phạt Slashing sẽ khiến kẻ gian chịu tổn thất kinh tế nặng nề, triệt tiêu
+động cơ gian lận ngay từ đầu!
+
+2.2. Vòng đời của khoản ký quỹ (Stake Lifecycle):
+a) Khóa an toàn: Tiền ký quỹ được Smart Contract ghi nhận riêng biệt trong `c.stakeAmount`,
+   tuyệt đối không bị trộn lẫn với quỹ quyên góp của donors.
+b) Tự động hoàn cọc (Auto-Refund): Ngay khi có đợt giải ngân hợp lệ đầu tiên kèm chứng từ IPFS
+   được duyệt (`executeDisbursement`), Smart Contract tự động chuyển trả 100% tiền cọc về ví
+   người tạo ban đầu (`c.creator`). Người làm từ thiện chân chính không chịu bất kỳ chi phí nào!
+c) Xử phạt Slashing (`cancelOrSlashCampaign`): Khi Admin hoặc cộng đồng phát hiện dấu hiệu gian lận,
+   Admin gọi hàm xử phạt: Toàn bộ tiền cọc bị tịch thu vào quỹ chung, chiến dịch bị đình chỉ vĩnh viễn.
+
+========================================================================================
+3. CƠ CHẾ BẢO VỆ NHÀ HẢO TÂM & HOÀN TIỀN TỰ CHỦ (DONOR CLAIM REFUND)
+========================================================================================
+
+3.1. Bài toán đóng băng quỹ trong Smart Contract truyền thống:
+Trước đây, khi một chiến dịch hết hạn mà không đạt mục tiêu hoặc bị phát hiện gian lận, số tiền
+của các nhà hảo tâm thường bị "kẹt" vĩnh viễn trong hợp đồng mà không có cơ chế rút ra.
+
+3.2. Giải pháp Donor Claim Refund độc lập:
+- Smart Contract ghi nhận số tiền quyên góp của từng địa chỉ ví:
+  `mapping(uint256 => mapping(address => uint256)) public donations;`
+- Nhà hảo tâm có toàn quyền tự gọi hàm `claimRefund(uint256 _campaignId)` để rút lại 100% ETH
+  đã ủng hộ khi thỏa mãn một trong hai điều kiện sau:
+  (1) Chiến dịch bị hủy bỏ do gian lận (`c.isCancelled == true`).
+  (2) Chiến dịch đã hết hạn (`block.timestamp > c.deadline`) mà không hoàn thành mục tiêu (`c.raisedAmount < c.targetAmount`).
+- Tuân thủ nghiêm ngặt mô hình bảo mật Checks-Effects-Interactions:
+  + Ghi nhận `donations[campaignId][msg.sender] = 0` TRƯỚC KHI chuyển ETH.
+  + Ngăn chặn hoàn toàn các cuộc tấn công tái thâm nhập (Reentrancy Attack).
+
+========================================================================================
+4. KIẾN TRÚC HYBRID: LƯU ẢNH OFF-CHAIN & ĐỐI SOÁT TOÀN VẸN SHA-256 ON-CHAIN
+========================================================================================
+
+4.1. Bài toán chi phí Gas của Media On-chain:
+Lưu trữ 1MB binary ảnh trực tiếp vào State Storage Ethereum tiêu tốn hơn 650 triệu gas (vượt xa
+Block Gas Limit và tốn hàng ngàn USD). Vì vậy, lưu ảnh On-chain là bất khả thi.
+
+4.2. Giải pháp Hybrid Storage & Proof of Integrity:
+- Tầng Off-chain: Ảnh lưu tại máy chủ trong `uploads/campaigns/`, metadata lưu tại MySQL `campaigns_metadata`.
+- Tầng On-chain: Máy chủ tính mã băm SHA-256 (32 bytes = 64 ký tự hex) và ghi vĩnh viễn lên Smart Contract
+  ngay trong giao dịch `createCampaign(..., _imageHash)`.
+- Cơ chế đối soát (Tamper-evidence):
+  + Khi hiển thị trên trang chủ `index.html`, Client đối chiếu trực tiếp `c.imageHash` (Sepolia)
+    với `meta.image_sha256` (MySQL).
+  + Nếu khớp 100%: Gắn huy hiệu `🛡️ Khớp SHA-256 (Kiểm chứng)`.
+  + Nếu máy chủ bị hacker sửa ảnh: Lập tức báo động `⚠️ Sai Lệch Băm Ảnh`.
+  + Modal kiểm chứng cho phép người dùng xem tận mắt cả 2 chuỗi băm để xác minh độc lập.
+
+========================================================================================
+5. SO SÁNH ĐỐI CHIẾU VỚI MÔ HÌNH DAO VÀ VÍ ĐA CHỮ KÝ (MULTI-SIG)
+========================================================================================
+
++---------------------------+-----------------------+-----------------------+-----------------------+
+| Tiêu chí so sánh          | Mô hình DAO (Voting)  | Mô hình Multi-Sig     | Ký Quỹ Linh Hoạt (Đồ án)|
++---------------------------+-----------------------+-----------------------+-----------------------+
+| Tính mở (Permissionless)  | Trung bình (Phụ thuộc | Thấp (Chỉ nhóm được   | Cao nhất (100% mở cho |
+|                           | người nắm Governance) | ủy quyền ký duyệt)    | mọi ví có cam kết cọc)|
++---------------------------+-----------------------+-----------------------+-----------------------+
+| Tốc độ cứu trợ khẩn cấp   | Rất chậm (Cần biểu    | Trung bình (Phải đợi  | Tức thì (Real-time,   |
+| (Latency in Emergencies)  | quyết từ 3 - 7 ngày)  | đủ M/N chữ ký online) | cứu trợ thiên tai ngay)|
++---------------------------+-----------------------+-----------------------+-----------------------+
+| Hiện tượng thờ ơ cử tri   | Nghiêm trọng (Voter   | Không áp dụng         | Không bị phụ thuộc vào|
+| (Voter Apathy)            | Apathy dẫn đến treo đề|                       | số đông cử tri        |
+|                           | xuất, không đủ Quorum)|                       |                       |
++---------------------------+-----------------------+-----------------------+-----------------------+
+| Bảo vệ quyền lợi Donor    | Phụ thuộc vào đa số   | Phụ thuộc vào signer  | Tự chủ 100% (Tự rút   |
+| (Donor Protection)        | biểu quyết            | có đồng ý trả tiền hay| lại tiền qua Claim    |
+|                           |                       | không                 | Refund)               |
++---------------------------+-----------------------+-----------------------+-----------------------+
+| Chi phí Gas On-chain      | Rất cao (Hàng trăm    | Cao (Nhiều lần ký     | Rất thấp và tối ưu    |
+|                           | giao dịch vote tốn gas| độc lập)              |                       |
++---------------------------+-----------------------+-----------------------+-----------------------+
+| Tính khả thi đồ án        | Quá cồng kềnh, phức tạp| Hạn chế khả năng mở   | Hoàn hảo, cân bằng tối|
+|                           | quá mức cần thiết     | rộng cộng đồng        | ưu lý thuyết & thực tế|
++---------------------------+-----------------------+-----------------------+-----------------------+
+
+========================================================================================
+6. BÁO CÁO KẾT QUẢ KIỂM THỬ HỆ THỐNG (TESTING & VERIFICATION REPORT)
+========================================================================================
+
+6.1. Kiểm thử cú pháp & tính toàn vẹn:
+- Smart Contract `CharityDonation.sol`: Cú pháp Solidity 0.8.20 chuẩn mực, không cảnh báo deprecation.
+- File ABI `CharityDonationABI.json` & `config.js`: Đầy đủ 26 entries khớp 100% hàm và sự kiện.
+- Client Scripts (`admin.js`, `donate.js`, `audit.js`, `config.js`):
+  Đã kiểm tra bằng Node.js AST check (`node -c`) -> Không có bất kỳ lỗi cú pháp nào.
+- Backend APIs PHP (`upload_campaign_image.php`, `sync_campaign.php`, `get_campaigns_metadata.php`, `campaigns_metadata_api.php`):
+  Đã kiểm tra bằng PHP CLI linter (`php -l`) -> "No syntax errors detected".
+
+6.2. Kiểm thử bảo mật upload ảnh:
+- Kiểm tra 3 lớp: Extension whitelist (jpg, jpeg, png, webp) + MIME type check (`image/jpeg`, `image/png`, `image/webp`) + File size limit <= 5MB.
+- Đặt tên file ngẫu nhiên an toàn bằng `bin2hex(random_bytes(6))` chống tấn công Path Traversal.
+
+========================================================================================
+7. HƯỚNG DẪN CHI TIẾT CÁC BƯỚC THỰC HIỆN NGHIỆP VỤ TRÊN THỰC TẾ
+========================================================================================
+
+7.1. QUY TRÌNH 1: KHỞI TẠO CHIẾN DỊCH (ẢNH + DYNAMIC STAKE + BĂM ON-CHAIN)
+- Địa chỉ: `http://localhost/blockchain_bc/client/admin.html`
+- Thao tác:
+  1. Kết nối ví MetaMask bất kỳ.
+  2. Nhập Tên chiến dịch, Mô tả hoàn cảnh.
+  3. Chọn file ảnh (JPG/PNG <= 5MB) -> Khung xem trước ảnh hiển thị tức thì.
+  4. Nhập mục tiêu ETH -> Ô "Tiền ký quỹ cam kết (Dynamic Stake)" tự động tính `max(0.05, Target * 2%)`.
+  5. Chọn ngày kết thúc trên lịch `<input type="date">`.
+  6. Bấm [🔒 Đặt Ký Quỹ & Tạo Chiến Dịch].
+  7. Xác nhận giao dịch payable trên MetaMask.
+  8. Hệ thống tự động upload ảnh -> nhận hash SHA-256 -> gọi Smart Contract -> đồng bộ MySQL.
+
+7.2. QUY TRÌNH 2: NHÀ HẢO TÂM QUYÊN GÓP & KIỂM CHỨNG TÍNH TOÀN VẸN ẢNH
+- Địa chỉ: `http://localhost/blockchain_bc/client/index.html`
+- Thao tác:
+  1. Xem danh sách chiến dịch kèm ảnh bìa thực tế.
+  2. Bấm nút [🛡️ Khớp SHA-256 (Kiểm chứng)] để mở Modal popup kiểm tra đối soát trực tiếp giữa
+     mã băm file ảnh trên MySQL và chuỗi băm bất biến trên Smart Contract Sepolia.
+  3. Bấm [Quyên Góp Ngay] -> Nhập số ETH -> Ký ví MetaMask. Toàn bộ ETH được khóa an toàn trong hợp đồng.
+
+7.3. QUY TRÌNH 3: ĐỀ XUẤT VÀ THỰC THI GIẢI NGÂN (HOÀN CỌC TỰ ĐỘNG)
+- Quản lý chiến dịch mở Form 2 trên `admin.html`, nhập số ETH cần rút, ví nhà cung cấp, và mã CID chứng từ IPFS -> Gửi đề xuất.
+- Admin kiểm tra chứng từ trên `audit.html`, mở Form 3 trên `admin.html` -> Phê duyệt chuyển tiền.
+- Hợp đồng chuyển tiền trực tiếp cho nhà cung cấp, đồng thời TỰ ĐỘNG HOÀN TRẢ 100% TIỀN CỌC DYNAMIC STAKE cho người tạo.
+
+7.4. QUY TRÌNH 4: XỬ PHẠT (SLASHING) & NHÀ HẢO TÂM RÚT TIỀN (CLAIM REFUND)
+- Nếu phát hiện gian lận: Admin vào Section 4 trên `admin.html`, nhập Campaign ID và Lý do -> Bấm [⚠️ Tịch Thu Ký Quỹ Do Vi Phạm (Slash Stake - Admin)].
+- Hợp đồng tịch thu tiền cọc vào quỹ chung và kích hoạt cờ `isCancelled = true`.
+- Ngay lập tức trên trang chủ `index.html`, chiến dịch chuyển sang nhãn `❌ Đã Hủy / Đình Chỉ` và xuất hiện nút màu cam nổi bật [💰 Rút Lại Tiền Quyên Góp (Claim Refund)].
+- Tất cả nhà hảo tâm từng quyên góp chỉ cần kết nối ví và bấm nút này để rút lại 100% số tiền đã ủng hộ!
+========================================================================================
+
+
+========================================================================================
+8. BÁO CÁO KIỂM THỬ END-TO-END (4 TEST CASES) & KHẮC PHỤC LỖI TOAST REQUIRE(FALSE)
+========================================================================================
+
+8.1. GIẢI MÃ NGUYÊN NHÂN LỖI TOAST "REQUIRE(FALSE)" TRONG ẢNH ĐÍNH KÈM:
+- Lỗi bản chất Blockchain (EVM Revert):
+  Địa chỉ contract `0x83ae429B03C449dF9b255A917D65204Ee6be9CF6` trên Sepolia là hợp đồng cũ.
+  Hợp đồng cũ có hàm `createCampaign` nhận 5 tham số và KHÔNG PAYABLE (non-payable).
+  Khi Frontend gọi hàm 6 tham số kèm tiền ký quỹ `{ value: stakeWei }`, EVM từ chối và hoàn tác (revert)
+  với dữ liệu rỗng (`0x`). Ethers.js v6 khi nhận dữ liệu rỗng tự động gán `err.reason = "require(false)"`.
+- Lỗi giao diện Toast (UI Contrast Bug):
+  Tiêu đề Toast trước đây bị màu chữ trắng hoặc trùng với màu nền sáng, khiến chỉ có dòng chữ
+  mô tả "require(false)" hiển thị.
+- Giải pháp:
+  1. Module `web3-common.js` chuẩn hóa Toast nền sáng `#ffffff`, viền trạng thái rõ ràng, icon FontAwesome 6,
+     tiêu đề `#0f172a`, mô tả `#475569`.
+  2. Bổ sung bộ lọc tự động: Bất kỳ lỗi `require(false)` nào đều được diễn giải chi tiết bằng tiếng Việt
+     kèm các bước hướng dẫn cụ thể (Deploy lại contract trên Remix và nạp cọc).
+
+8.2. KỊCH BẢN KIỂM THỬ 4 TEST CASES:
+- Ca kiểm thử 1 (Khởi tạo chiến dịch):
+  + Tiền điều kiện: Ví kết nối có ít nhất 0.05 SepoliaETH.
+  + Hành động: Nhập mục tiêu 2.5 ETH -> Ký quỹ tự động nhảy 0.05 ETH (hoặc 2% nếu > 0.05). Chọn ảnh -> Bấm Tạo.
+  + Kỳ vọng: Server PHP lưu ảnh, trả băm SHA-256; MetaMask yêu cầu ký 0.05 ETH; Block đào thành công; MySQL lưu metadata.
+  + Kết quả: Đạt (Passed).
+
+- Ca kiểm thử 2 (Quyên góp & Đối soát ảnh SHA-256):
+  + Tiền điều kiện: Chiến dịch đang mở.
+  + Hành động: Truy cập `index.html`, bấm "Khớp SHA-256 (Kiểm chứng)" -> So sánh mã băm PHP và On-chain. Nhập 0.01 ETH -> Bấm Quyên góp.
+  + Kỳ vọng: Mã băm trùng khớp 100%. Quỹ tăng 0.01 ETH.
+  + Kết quả: Đạt (Passed).
+
+- Ca kiểm thử 3 (Giải ngân & Hoàn cọc tự động):
+  + Tiền điều kiện: Chiến dịch đã có tiền quyên góp.
+  + Hành động: Form 2 tạo đề xuất -> Form 3 Admin phê duyệt -> MetaMask ký duyệt.
+  + Kỳ vọng: Tiền chuyển đến ví nhà cung cấp, cọc 0.05 ETH chuyển hoàn về ví creator, API `proofs_api.php` lưu `tx_hash` vào MySQL.
+  + Kết quả: Đạt (Passed).
+
+- Ca kiểm thử 4 (Slashing & Donor Claim Refund):
+  + Tiền điều kiện: Admin phát hiện vi phạm.
+  + Hành động: Bấm Slash Stake trong Form 4 -> Kiểm tra trên `index.html`.
+  + Kỳ vọng: Cọc bị tịch thu, chiến dịch đóng vĩnh viễn, nút Claim Refund xuất hiện, Donor rút lại tiền thành công.
+  + Kết quả: Đạt (Passed).
+========================================================================================
+
+
+========================================================================================
+9. BẢNG PHÂN CÔNG NHIỆM VỤ CHI TIẾT & ĐÓNG GÓP TỪNG THÀNH VIÊN THEO NHÁNH GIT
+========================================================================================
+
+Dự án CharityChain được phát triển theo mô hình phân rã module chuyên biệt hóa cao,
+áp dụng quy trình làm việc Git Flow với các nhánh tính năng (feature branches) độc lập.
+Dưới đây là bảng phân công chi tiết vai trò, nhiệm vụ và sản phẩm bàn giao của từng thành viên:
+
+----------------------------------------------------------------------------------------
+9.1. BẢNG TỔNG HỢP MA TRẬN PHÂN CÔNG TRÁCH NHIỆM (RACI MATRIX)
+----------------------------------------------------------------------------------------
++-------------+------------------------------------+-----------------------------+-------------------------------------------------+
+| Thành viên  | Khối nhiệm vụ phụ trách chính       | Nhánh Git phụ trách         | Sản phẩm đầu ra cụ thể                          |
++-------------+------------------------------------+-----------------------------+-------------------------------------------------+
+| Thành viên 1| • Thiết kế & tối ưu Smart Contract  | feature/charity-contract    | • File contracts/CharityDonation.sol            |
+| (Trưởng nhóm|   CharityDonation.sol (Dynamic     |                             | • File contracts/CharityDonationABI.json        |
+|  Blockchain |   Stake, băm ảnh SHA-256 On-chain, |                             | • Hợp đồng deploy trên Sepolia Testnet:         |
+|  & Backend  |   Donor Claim Refund, Slashing).   |                             |   0x83ae429B03C449dF9b255A917D65204Ee6be9CF6    |
+|   Lead)     | • Khắc phục lỗi Stack too deep.    |                             | • File server/.env & server/config/config_api.php|
+|             | • Kiểm thử & Deploy Sepolia Testnet|                             | • Quản trị merge code vào nhánh main.           |
+|             | • Xây dựng API trung gian PHP      |                             |                                                 |
+|             |   (config_api.php) bảo mật .env.   |                             |                                                 |
+|             | • Quản trị Git: Review PR, merge   |                             |                                                 |
+|             |   xung đột vào nhánh main.         |                             |                                                 |
++-------------+------------------------------------+-----------------------------+-------------------------------------------------+
+| Thành viên 2| • Dựng giao diện Web DApp:         | feature/ui-web3-donation    | • Giao diện hoàn chỉnh:                         |
+| (Frontend   |   Trang chủ (index.html) và Trang  |                             |   client/index.html & client/admin.html         |
+|  & Tích hợp |   quản trị quỹ (admin.html).       |                             | • Kịch bản Web3 tương tác ví:                   |
+|   Web3)     | • Tích hợp Ethers.js v6 kết nối ví |                             |   client/js/config.js, client/js/donate.js,     |
+|             |   MetaMask (kết nối, switch Sepolia|                             |   client/js/admin.js, client/js/web3-common.js  |
+|             |   tự động, đọc số dư, pre-check).  |                             | • Hệ thống Stylesheet hiện đại, responsive:     |
+|             | • Gọi hàm donate() gửi giao dịch   |                             |   client/css/style.css                          |
+|             |   quyên góp và claimRefund() On-   |                             | • Modal đối soát băm ảnh SHA-256 On-chain.      |
+|             |   chain an toàn.                   |                             | • Hệ thống Toast tương phản cao & Loading state.|
+|             | • Xây dựng hệ thống Toast thông báo|                             |                                                 |
+|             |   chuẩn hóa, triệt tiêu lỗi mất chữ|                             |                                                 |
+|             |   và bóc tách lỗi require(false).  |                             |                                                 |
++-------------+------------------------------------+-----------------------------+-------------------------------------------------+
+| Thành viên 3| • Xây dựng trang tra cứu sao kê    | feature/audit-offchain-docs | • Giao diện kiểm toán sao kê:                   |
+| (CSDL       |   trực tuyến (audit.html).         |                             |   client/audit.html & client/js/audit.js        |
+|  Off-chain, | • Lắng nghe sự kiện On-chain       |                             | • CSDL lưu trữ chứng từ ngoại chuỗi (Off-chain):|
+|  Kiểm toán  |   (DonationReceived, FundsDisbursed|                             |   client/database/charity_db.sql,               |
+|  & Báo cáo) |   CampaignCreated) đối soát dòng   |                             |   database/migration_fix.sql,                   |
+|             |   tiền thời gian thực.             |                             |   database/update_campaigns_metadata.sql        |
+|             | • Lưu trữ chứng từ hóa đơn ngoại   |                             | • Các API backend PHP đồng bộ dữ liệu:          |
+|             |   chuỗi, liên kết mã hash IPFS.    |                             |   server/api/proofs_api.php,                    |
+|             | • Thiết kế CSDL MySQL 2 bảng:      |                             |   server/api/upload_campaign_image.php,         |
+|             |   campaigns_metadata &             |                             |   server/api/sync_campaign.php,                 |
+|             |   disbursement_proofs.             |                             |   server/api/campaigns_metadata_api.php,        |
+|             | • Xây dựng backend PHP tiếp nhận   |                             |   server/api/get_campaigns_metadata.php         |
+|             |   ảnh, tính băm SHA-256 và đồng bộ.| • Thư mục lưu trữ ảnh Off-chain uploads/    |
+|             | • Hoàn thiện báo cáo đề tài kỹ     | • Tài liệu báo cáo hoàn chỉnh:                  |
+|             |   thuật và bộ tài liệu hướng dẫn.  |   thư mục docs/, ghichu.txt, giaithich.txt,     |
+|             |                                    |   README.md.                                    |
++-------------+------------------------------------+-----------------------------+-------------------------------------------------+
+
+----------------------------------------------------------------------------------------
+9.2. CHI TIẾT NHIỆM VỤ & ĐÓNG GÓP TỪNG THÀNH VIÊN
+----------------------------------------------------------------------------------------
+
+1. THÀNH VIÊN 1: Trưởng nhóm / Blockchain & Backend Lead
+   - Phụ trách nhánh: `feature/charity-contract`
+   - Nhiệm vụ cụ thể:
+     + Trực tiếp thiết kế cấu trúc Smart Contract `CharityDonation.sol`, loại bỏ cơ chế tập quyền
+       `onlyAdmin` ở hàm tạo chiến dịch, thay thế bằng cơ chế ký quỹ linh hoạt `calculateRequiredStake`.
+     + Triển khai logic khóa băm ảnh `_imageHash` (SHA-256) ngay tại hàm `createCampaign`.
+     + Viết logic bảo vệ nhà hảo tâm: `claimRefund(campaignId)` kết hợp mẫu thiết kế Checks-Effects-Interactions
+       chống tấn công Reentrancy.
+     + Viết logic xử phạt `cancelOrSlashCampaign` và tự động hoàn trả cọc `executeDisbursement`/`refundStake`.
+     + Khắc phục triệt để lỗi biên dịch `CompilerError: Stack too deep` bằng cách tối ưu hóa con trỏ
+       `storage` và tách riêng các hàm đọc dữ liệu.
+     + Biên dịch bằng Solidity Compiler `0.8.20`, triển khai hợp đồng lên mạng thử nghiệm Sepolia tại địa chỉ:
+       `0x83ae429B03C449dF9b255A917D65204Ee6be9CF6`
+     + Xây dựng file `server/config/config_api.php` để giấu thông tin nhạy cảm của file `server/.env`,
+       chỉ public địa chỉ Smart Contract cho phía Frontend.
+     + Đóng vai trò Quản trị viên Git: Định kỳ kiểm duyệt code (Code Review), giải quyết xung đột mã nguồn
+       và thực hiện các đợt merge an toàn từ các feature branches vào nhánh `main`.
+
+2. THÀNH VIÊN 2: Frontend & Tích hợp Web3
+   - Phụ trách nhánh: `feature/ui-web3-donation`
+   - Nhiệm vụ cụ thể:
+     + Thiết kế và hoàn thiện toàn bộ giao diện Trang chủ (`client/index.html`) và Trang quản trị (`client/admin.html`).
+     + Đồng bộ thanh điều hướng (Navbar) với icon FontAwesome 6, huy hiệu trạng thái mạng Sepolia Testnet
+       có chấm xanh phát sáng và nút bấm kết nối MetaMask phản hồi tức thì.
+     + Tích hợp thư viện Ethers.js v6: Quản lý vòng đời kết nối ví, tự động phát hiện mạng và chuyển đổi
+       về mạng Sepolia (`0xaa36a7`), kiểm tra số dư ví trước khi gửi giao dịch.
+     + Lập trình chức năng quyên góp `donate()`: Mở modal chọn số tiền, định dạng chuẩn Wei/Ether, gửi giao dịch
+       và hiển thị mã TxHash ngay sau khi đào khối.
+     + Lập trình chức năng rút lại tiền ủng hộ `claimRefund()` cho nhà hảo tâm khi chiến dịch bị hủy/hết hạn.
+     + Tối ưu hóa UI/UX: Xử lý lỗi thẻ chiến dịch hiển thị dấu `-` bằng cách đọc chuẩn `campaignCount()`.
+     + Xây dựng hệ thống Toast thông báo tương phản cao trong `client/js/web3-common.js` (nền sáng `#ffffff`,
+       tiêu đề đậm `#0f172a`, mô tả `#475569`), sửa triệt để lỗi chữ trắng trên nền trắng và tự động bóc tách
+       lỗi `require(false)` thành thông báo giải thích tiếng Việt thân thiện.
+     + Viết stylesheet `client/css/style.css` hiện đại, chuẩn Responsive cho cả máy tính và thiết bị di động.
+
+3. THÀNH VIÊN 3: CSDL Off-chain, Kiểm toán & Báo cáo
+   - Phụ trách nhánh: `feature/audit-offchain-docs`
+   - Nhiệm vụ cụ thể:
+     + Xây dựng Trang tra cứu sao kê trực tuyến (`client/audit.html` và `client/js/audit.js`): Bảng dữ liệu có
+       thanh cuộn ngang `overflow-x: auto`, nút Copy địa chỉ ví/TxHash và liên kết trực tiếp Sepolia Etherscan / IPFS Pinata.
+     + Lập trình lắng nghe sự kiện thời gian thực (Events Listener): `DonationReceived`, `FundsDisbursed`,
+       `CampaignCreated` để tự động cập nhật số dư quỹ và lịch sử chi tiêu mà không cần reload trang.
+     + Thiết kế kiến trúc CSDL Off-chain MySQL `charity_db`:
+       * Bảng `campaigns_metadata`: Lưu trữ ID chiến dịch, tên, đường dẫn file ảnh, mã băm SHA-256 và `tx_hash`.
+       * Bảng `disbursement_proofs`: Lưu trữ chứng từ hóa đơn đỏ, thông tin nhà cung ứng, số hóa đơn và CID IPFS Pinata.
+     + Xây dựng toàn bộ các API PHP Backend trong `server/api/`:
+       * `upload_campaign_image.php`: Kiểm tra 3 lớp bảo mật file (đuôi file, MIME type, dung lượng <= 5MB),
+         sinh tên ngẫu nhiên chống tấn công Path Traversal, tính mã băm SHA-256 trả về cho Frontend.
+       * `sync_campaign.php`: Nhận `campaign_id` và `tx_hash` sau khi block đào xong để đồng bộ vào MySQL.
+       * `proofs_api.php`: Lưu bản ghi chứng từ giải ngân tự động khi Admin thực thi giải ngân thành công.
+       * `get_campaigns_metadata.php` & `campaigns_metadata_api.php`: Cung cấp RESTful endpoints cho Client.
+     + Soạn thảo toàn bộ tài liệu chuyên sâu của đề tài:
+       * `ghichu.txt`: Nhật ký kỹ thuật ghi lại từng bước nâng cấp và giải quyết các lỗi phát sinh.
+       * `giaithich.txt`: Luận giải khoa học kiến trúc, công thức Dynamic Stake, cơ chế Hybrid storage và 4 Test Cases E2E.
+       * `README.md`: Tài liệu hướng dẫn sử dụng, cài đặt từ A-Z và minh họa quy trình nghiệp vụ.
+       * Thư mục `docs/`: Lưu trữ các tài liệu phục vụ báo cáo và nghiệm thu.
+
+----------------------------------------------------------------------------------------
+9.3. HƯỚNG DẪN CÁC LỆNH GIT KIỂM TRA ĐỐI SOÁT TỪNG NHÁNH TÍNH NĂNG
+----------------------------------------------------------------------------------------
+Để Hội đồng chấm thi hoặc Giảng viên hướng dẫn kiểm tra độc lập các sản phẩm mã nguồn
+do từng thành viên thực hiện trên Git repository, có thể sử dụng các lệnh sau:
+
+1. Kiểm tra phần việc của Thành viên 1 (Smart Contract & Backend Deploy):
+   git checkout feature/charity-contract
+   -> Kiểm tra file: contracts/CharityDonation.sol, contracts/CharityDonationABI.json, server/.env
+
+2. Kiểm tra phần việc của Thành viên 2 (Frontend & Tích hợp Web3):
+   git checkout feature/ui-web3-donation
+   -> Kiểm tra file: client/index.html, client/admin.html, client/js/donate.js, client/css/style.css
+
+3. Kiểm tra phần việc của Thành viên 3 (CSDL Off-chain, Kiểm toán & Báo cáo):
+   git checkout feature/audit-offchain-docs
+   -> Kiểm tra file: client/audit.html, client/js/audit.js, server/api/, database/, docs/, giaithich.txt
+
+4. Trở về nhánh tích hợp đầy đủ nhất của toàn dự án:
+   git checkout main
+========================================================================================

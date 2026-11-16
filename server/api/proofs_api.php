@@ -56,24 +56,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 // 4. Xử lý lưu chứng từ mới khi giải ngân (POST)
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $input = json_decode(file_get_contents("php://input"), true);
-    if (!empty($input['tx_hash']) && isset($input['campaign_id']) && !empty($input['ipfs_hash'])) {
-        $stmt = $conn->prepare("INSERT INTO disbursement_proofs (tx_hash, campaign_id, supplier_name, invoice_number, description, ipfs_hash) VALUES (?, ?, ?, ?, ?, ?)");
+    if (!empty($input['tx_hash']) && isset($input['campaign_id'])) {
+        $campaign_id    = intval($input['campaign_id']);
+        $tx_hash        = trim($input['tx_hash']);
+        $supplier_name  = trim($input['supplier_name'] ?? 'Đơn vị cung ứng thực tế');
+        $invoice_number = trim($input['invoice_number'] ?? ('HD-' . date('Ymd') . '-' . substr($tx_hash, 2, 4)));
+        $description    = trim($input['description'] ?? ('Giải ngân thực tế cho chiến dịch #' . $campaign_id));
+        $ipfs_hash      = trim($input['ipfs_hash'] ?? ($env['SAMPLE_IPFS_CID'] ?? ''));
+
+        // Chèn mới hoặc cập nhật nếu đã tồn tại tx_hash (tránh duplicate key error)
+        $stmt = $conn->prepare("INSERT INTO disbursement_proofs (tx_hash, campaign_id, supplier_name, invoice_number, description, ipfs_hash) 
+                                VALUES (?, ?, ?, ?, ?, ?)
+                                ON DUPLICATE KEY UPDATE 
+                                campaign_id = VALUES(campaign_id),
+                                supplier_name = VALUES(supplier_name),
+                                invoice_number = VALUES(invoice_number),
+                                description = VALUES(description),
+                                ipfs_hash = VALUES(ipfs_hash)");
         $stmt->bind_param(
             "sissss",
-            $input['tx_hash'],
-            $input['campaign_id'],
-            $input['supplier_name'],
-            $input['invoice_number'],
-            $input['description'],
-            $input['ipfs_hash']
+            $tx_hash,
+            $campaign_id,
+            $supplier_name,
+            $invoice_number,
+            $description,
+            $ipfs_hash
         );
         if ($stmt->execute()) {
-            echo json_encode(["status" => "success", "id" => $stmt->insert_id]);
+            echo json_encode(["status" => "success", "id" => $stmt->insert_id ?: true, "tx_hash" => $tx_hash]);
         } else {
             http_response_code(400);
             echo json_encode(["status" => "error", "message" => $stmt->error]);
         }
         $stmt->close();
+    } else {
+        http_response_code(400);
+        echo json_encode(["status" => "error", "message" => "Thiếu tham số bắt buộc tx_hash hoặc campaign_id"]);
     }
 }
 

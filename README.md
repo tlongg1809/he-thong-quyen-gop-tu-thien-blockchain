@@ -139,28 +139,26 @@ blockchain_bc/
    - `campaigns_metadata`: Lưu vết ảnh đại diện, chuỗi băm SHA-256 và `tx_hash`.
    - `disbursement_proofs`: Lưu chứng từ giải ngân, hóa đơn và mã CID IPFS Pinata.
 
-### 3. Biên Dịch & Triển Khai Smart Contract Lên Sepolia
+### 3. Biên Dịch & Triển Khai Smart Contract Lên Sepolia (Dành cho Remix IDE)
+> ⚠️ **LƯU Ý:** Trình biên dịch **Remix IDE chỉ nhận file Solidity (`.sol`)**, tuyệt đối **KHÔNG** dán mã JavaScript (`let`, `const`, `function()`) vào Remix!
 1. Truy cập [Remix Ethereum IDE](https://remix.ethereum.org).
-2. Tạo mới file `CharityDonation.sol` trong thư mục `contracts/` trên Remix và dán toàn bộ mã từ [contracts/CharityDonation.sol](contracts/CharityDonation.sol).
+2. Tạo mới file `CharityDonation.sol` trong thư mục `contracts/` trên Remix và **chỉ dán duy nhất toàn bộ mã Solidity** từ file [contracts/CharityDonation.sol](contracts/CharityDonation.sol).
 3. Tại tab **Solidity Compiler**:
    - Chọn compiler phiên bản **`0.8.20`**.
-   - Bấm **Compile CharityDonation.sol** (Hợp đồng đã được tối ưu con trỏ `storage`, biên dịch thành công 100% không bị lỗi *Stack too deep*).
+   - Bấm **Compile CharityDonation.sol** (Hợp đồng đã tối ưu con trỏ `storage`, biên dịch thành công 100%).
 4. Tại tab **Deploy & Run Transactions**:
-   - **Environment**: Chọn **`Injected Provider - MetaMask`** (Đảm bảo ví MetaMask đang kết nối mạng Sepolia).
-   - Bấm nút cam **Deploy** và xác nhận giao dịch trên MetaMask.
-5. Sau khi giao dịch hoàn tất, copy địa chỉ contract vừa tạo (ví dụ: `0x1234...abcd`).
+   - **Environment**: Chọn **`Injected Provider - MetaMask`** (Mạng Sepolia Testnet).
+   - Bấm nút cam **Deploy** và xác nhận trên ví MetaMask.
+5. Sau khi đào khối thành công, copy địa chỉ Smart Contract vừa tạo tại mục **Deployed Contracts** (dưới cùng tab Deploy).
 
-### 4. Cấu Hình Ứng Dụng
-1. Mở file [server/.env](server/.env), cập nhật địa chỉ contract mới:
+### 4. Cấu Hình Ứng Dụng Web (Dành cho XAMPP)
+*(Chỉ dán địa chỉ contract vào file cấu hình của server, không sửa vào Remix!)*
+1. Mở file [server/.env](server/.env), dán địa chỉ hợp đồng vừa copy:
    ```env
-   CONTRACT_ADDRESS=0xaB7F457bdAD4e861985FC533aaaf22Ed7D9bCD0f
+   CONTRACT_ADDRESS=0x_dia_chi_contract_vua_deploy_cua_ban
    ```
-2. Mở file [client/js/config.js](client/js/config.js), đồng bộ địa chỉ dự phòng:
-   ```javascript
-   let CHARITY_CONTRACT_ADDRESS = "0xaB7F457bdAD4e861985FC533aaaf22Ed7D9bCD0f";
-   ```
-3. Đặt toàn bộ thư mục dự án vào `C:\xampp\htdocs\blockchain_bc`.
-4. Truy cập DApp qua trình duyệt:
+2. Đặt toàn bộ thư mục dự án vào `C:\xampp\htdocs\blockchain_bc`.
+3. Truy cập DApp qua trình duyệt:
    - **Trang chủ:** `http://localhost/blockchain_bc/client/index.html`
    - **Tra cứu sao kê:** `http://localhost/blockchain_bc/client/audit.html`
    - **Trang quản trị:** `http://localhost/blockchain_bc/client/admin.html`

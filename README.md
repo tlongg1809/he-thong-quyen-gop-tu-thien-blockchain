@@ -20,7 +20,8 @@
 5. [Hướng Dẫn Các Quy Trình Nghiệp Vụ](#-hướng-dẫn-các-quy-trình-nghiệp-vụ)
 6. [Kịch Bản Kiểm Thử Toàn Diện (Test Cases)](#-kịch-bản-kiểm-thử-toàn-diện-test-cases)
 7. [Các Sự Cố Kỹ Thuật Đã Tối Ưu](#-các-sự-cố-kỹ-thuật-đã-tối-ưu)
-8. [Giấy Phép (License)](#-giấy-phép-license)
+8. [Phân Công Nhiệm Vụ Thành Viên (Team Work)](#-phân-công-nhiệm-vụ-thành-viên-team-work--git-branches)
+9. [Giấy Phép (License)](#-giấy-phép-license)
 
 ---
 
@@ -152,11 +153,11 @@ blockchain_bc/
 ### 4. Cấu Hình Ứng Dụng
 1. Mở file [server/.env](server/.env), cập nhật địa chỉ contract mới:
    ```env
-   CONTRACT_ADDRESS=0x_dia_chi_contract_moi_cua_ban
+   CONTRACT_ADDRESS=0xaB7F457bdAD4e861985FC533aaaf22Ed7D9bCD0f
    ```
 2. Mở file [client/js/config.js](client/js/config.js), đồng bộ địa chỉ dự phòng:
    ```javascript
-   let CHARITY_CONTRACT_ADDRESS = "0x_dia_chi_contract_moi_cua_ban";
+   let CHARITY_CONTRACT_ADDRESS = "0xaB7F457bdAD4e861985FC533aaaf22Ed7D9bCD0f";
    ```
 3. Đặt toàn bộ thư mục dự án vào `C:\xampp\htdocs\blockchain_bc`.
 4. Truy cập DApp qua trình duyệt:
@@ -224,6 +225,31 @@ blockchain_bc/
    - Kiểm tra tương thích contract bằng hàm thuần túy `calculateRequiredStake` tránh tốn gas vô ích.
 4. **Sửa lỗi hiển thị thống kê dấu `-` trên trang chủ**:
    - Viết lại [donate.js](client/js/donate.js) đọc chính xác `contract.campaignCount()`, cộng dồn tổng quỹ và số lượt đóng góp gán tức thì vào DOM.
+
+---
+
+## 👥 Phân Công Nhiệm Vụ Thành Viên (Team Work & Git Branches)
+
+| Thành viên | Khối nhiệm vụ phụ trách chính | Nhánh Git | Sản phẩm đầu ra cụ thể |
+| :--- | :--- | :--- | :--- |
+| **Thành viên 1**<br>*(Trưởng nhóm / Blockchain & Backend Lead)* | • Thiết kế & tối ưu Smart Contract `CharityDonation.sol` (Dynamic Stake, SHA-256 On-chain, Claim Refund, Slashing).<br>• Khắc phục triệt để lỗi *Stack too deep*.<br>• Triển khai kiểm thử và deploy hợp đồng lên Sepolia Testnet.<br>• Xây dựng API trung gian PHP (`config_api.php`) và quản lý cấu hình `.env` bảo mật.<br>• Quản trị Git: review Pull Request, giải quyết xung đột và merge vào `main`. | `feature/charity-contract` | • `contracts/CharityDonation.sol`<br>• `contracts/CharityDonationABI.json`<br>• Hợp đồng deploy trên Sepolia: `0xaB7F457bdAD4e861985FC533aaaf22Ed7D9bCD0f`<br>• `server/.env` & `server/config/config_api.php` |
+| **Thành viên 2**<br>*(Frontend & Tích hợp Web3)* | • Dựng giao diện Web DApp: Trang chủ (`index.html`) và Trang quản trị quỹ (`admin.html`).<br>• Tích hợp thư viện Ethers.js v6 kết nối ví MetaMask (kết nối, auto-switch Sepolia, pre-check).<br>• Gọi hàm `donate()` và `claimRefund()` gửi giao dịch lên Blockchain an toàn.<br>• Xây dựng hệ thống Toast thông báo tương phản cao, triệt tiêu lỗi mất chữ và phân tích lỗi `require(false)`. | `feature/ui-web3-donation` | • `client/index.html` & `client/admin.html`<br>• `client/js/config.js`, `client/js/donate.js`<br>• `client/js/admin.js`, `client/js/web3-common.js`<br>• `client/css/style.css` (Responsive & High-contrast UI) |
+| **Thành viên 3**<br>*(CSDL Off-chain, Kiểm toán & Báo cáo)* | • Xây dựng trang sao kê trực tuyến (`audit.html`).<br>• Lắng nghe sự kiện On-chain (`DonationReceived`, `FundsDisbursed`) để đối soát dòng tiền thời gian thực.<br>• Lưu trữ chứng từ hóa đơn ngoại chuỗi (Off-chain), liên kết mã băm CID IPFS Pinata.<br>• Thiết kế CSDL MySQL (`charity_db`) và các API PHP đồng bộ dữ liệu (`upload_campaign_image.php`, `sync_campaign.php`, `proofs_api.php`).<br>• Hoàn thiện báo cáo đề tài kỹ thuật và tài liệu nghiệm thu. | `feature/audit-offchain-docs` | • `client/audit.html` & `client/js/audit.js`<br>• CSDL: `client/database/charity_db.sql`, `database/migration_fix.sql`<br>• API Backend: `server/api/proofs_api.php`, `upload_campaign_image.php`, `sync_campaign.php`<br>• Tài liệu: `ghichu.txt`, `giaithich.txt`, `README.md`, thư mục `docs/` |
+
+### 🔍 Hướng Dẫn Kiểm Tra Đối Soát Trên Git:
+```bash
+# Kiểm tra sản phẩm của Thành viên 1:
+git checkout feature/charity-contract
+
+# Kiểm tra sản phẩm của Thành viên 2:
+git checkout feature/ui-web3-donation
+
+# Kiểm tra sản phẩm của Thành viên 3:
+git checkout feature/audit-offchain-docs
+
+# Trở về nhánh chính tích hợp toàn diện:
+git checkout main
+```
 
 ---
 

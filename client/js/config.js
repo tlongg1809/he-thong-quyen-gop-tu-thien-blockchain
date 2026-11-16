@@ -1,7 +1,7 @@
 // client/js/config.js
 
 // Giá trị mặc định từ .env (phòng trường hợp fetch API backend bị lỗi hoặc chạy không qua PHP server)
-let CHARITY_CONTRACT_ADDRESS = "0x83ae429B03C449dF9b255A917D65204Ee6be9CF6";
+let CHARITY_CONTRACT_ADDRESS = "0xaB7F457bdAD4e861985FC533aaaf22Ed7D9bCD0f";
 let CONTRACT_ADDRESS = CHARITY_CONTRACT_ADDRESS;
 
 // Hàm đọc biến môi trường từ server/.env

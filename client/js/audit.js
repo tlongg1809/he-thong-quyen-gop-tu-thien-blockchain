@@ -8,7 +8,7 @@
 let APP_CONFIG = {
     contractAddress: (typeof CHARITY_CONTRACT_ADDRESS !== "undefined" && CHARITY_CONTRACT_ADDRESS)
         ? CHARITY_CONTRACT_ADDRESS
-        : "0xaB7F457bdAD4e861985FC533aaaf22Ed7D9bCD0f",
+        : "0x83ae429B03C449dF9b255A917D65204Ee6be9CF6",
     rpcUrl: "https://ethereum-sepolia-rpc.publicnode.com",
     pinataGateway: "https://gateway.pinata.cloud/ipfs/",
     sampleIpfsCid: "bafybeidrka73ahngpdnnm2ckgweyqt4f5zsc5dsyezm5pknboq52rbe4fe"

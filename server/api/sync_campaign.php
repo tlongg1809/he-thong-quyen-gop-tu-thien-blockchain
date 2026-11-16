@@ -60,7 +60,7 @@ if ($conn->connect_error) {
     http_response_code(500);
     echo json_encode([
         "status" => "error",
-        "message" => "Lỗi kết nối cơ sở dữ liệu MySQL: " . $conn->connect_error
+        "message" => "Lỗi kết nối cơ sở dữ liệu MySQL Off-chain."
     ]);
     exit;
 }

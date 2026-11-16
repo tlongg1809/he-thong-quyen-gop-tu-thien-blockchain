@@ -44,7 +44,7 @@ if ($conn->connect_error) {
     echo json_encode([
         "status"  => "warning",
         "data"    => [],
-        "message" => "Lỗi kết nối MySQL: " . $conn->connect_error
+        "message" => "Lỗi kết nối cơ sở dữ liệu MySQL Off-chain."
     ]);
     exit;
 }

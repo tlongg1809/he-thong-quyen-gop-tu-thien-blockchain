@@ -187,7 +187,7 @@ Block Gas Limit và tốn hàng ngàn USD). Vì vậy, lưu ảnh On-chain là b
 
 8.1. GIẢI MÃ NGUYÊN NHÂN LỖI TOAST "REQUIRE(FALSE)" TRONG ẢNH ĐÍNH KÈM:
 - Lỗi bản chất Blockchain (EVM Revert):
-  Địa chỉ contract `0x83ae429B03C449dF9b255A917D65204Ee6be9CF6` trên Sepolia là hợp đồng cũ.
+  Địa chỉ contract `` trên Sepolia là hợp đồng cũ.
   Hợp đồng cũ có hàm `createCampaign` nhận 5 tham số và KHÔNG PAYABLE (non-payable).
   Khi Frontend gọi hàm 6 tham số kèm tiền ký quỹ `{ value: stakeWei }`, EVM từ chối và hoàn tác (revert)
   với dữ liệu rỗng (`0x`). Ethers.js v6 khi nhận dữ liệu rỗng tự động gán `err.reason = "require(false)"`.
@@ -244,7 +244,7 @@ Dưới đây là bảng phân công chi tiết vai trò, nhiệm vụ và sản
 | Thành viên 1| • Thiết kế & tối ưu Smart Contract  | feature/charity-contract    | • File contracts/CharityDonation.sol            |
 | (Trưởng nhóm|   CharityDonation.sol (Dynamic     |                             | • File contracts/CharityDonationABI.json        |
 |  Blockchain |   Stake, băm ảnh SHA-256 On-chain, |                             | • Hợp đồng deploy trên Sepolia Testnet:         |
-|  & Backend  |   Donor Claim Refund, Slashing).   |                             |   0x83ae429B03C449dF9b255A917D65204Ee6be9CF6    |
+|  & Backend  |   Donor Claim Refund, Slashing).   |                             |       |
 |   Lead)     | • Khắc phục lỗi Stack too deep.    |                             | • File server/.env & server/config/config_api.php|
 |             | • Kiểm thử & Deploy Sepolia Testnet|                             | • Quản trị merge code vào nhánh main.           |
 |             | • Xây dựng API trung gian PHP      |                             |                                                 |
@@ -299,7 +299,7 @@ Dưới đây là bảng phân công chi tiết vai trò, nhiệm vụ và sản
      + Khắc phục triệt để lỗi biên dịch `CompilerError: Stack too deep` bằng cách tối ưu hóa con trỏ
        `storage` và tách riêng các hàm đọc dữ liệu.
      + Biên dịch bằng Solidity Compiler `0.8.20`, triển khai hợp đồng lên mạng thử nghiệm Sepolia tại địa chỉ:
-       `0x83ae429B03C449dF9b255A917D65204Ee6be9CF6`
+       ``
      + Xây dựng file `server/config/config_api.php` để giấu thông tin nhạy cảm của file `server/.env`,
        chỉ public địa chỉ Smart Contract cho phía Frontend.
      + Đóng vai trò Quản trị viên Git: Định kỳ kiểm duyệt code (Code Review), giải quyết xung đột mã nguồn

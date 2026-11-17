@@ -4,14 +4,14 @@
  * Dự án: CharityChain - Quyên Góp Từ Thiện Minh Bạch Trên Ethereum Sepolia
  */
 
-// Biến lưu cấu hình được nạp động từ server/config/config_api.php (đọc từ .env)
+// Biến lưu cấu hình được nạp động 100% từ server/config/config_api.php (đọc bảo mật từ server/.env)
 let APP_CONFIG = {
     contractAddress: (typeof CHARITY_CONTRACT_ADDRESS !== "undefined" && CHARITY_CONTRACT_ADDRESS)
         ? CHARITY_CONTRACT_ADDRESS
-        : "0x83ae429B03C449dF9b255A917D65204Ee6be9CF6",
+        : "",
     rpcUrl: "https://ethereum-sepolia-rpc.publicnode.com",
     pinataGateway: "https://gateway.pinata.cloud/ipfs/",
-    sampleIpfsCid: "bafybeidrka73ahngpdnnm2ckgweyqt4f5zsc5dsyezm5pknboq52rbe4fe"
+    sampleIpfsCid: ""
 };
 
 let readContract = null;
@@ -152,6 +152,14 @@ async function loadCampaignList() {
     const selectEl = document.getElementById("selectCampaign");
     try {
         await loadServerConfig();
+
+        if (!APP_CONFIG.contractAddress || !APP_CONFIG.contractAddress.startsWith("0x")) {
+            selectEl.innerHTML = `<option value="">Lỗi: Chưa cấu hình CONTRACT_ADDRESS trong server/.env</option>`;
+            if (typeof showToast === "function") {
+                showToast("error", "Lỗi Cấu Hình", "Không tìm thấy CONTRACT_ADDRESS trong file server/.env. Vui lòng kiểm tra lại cấu hình!");
+            }
+            return;
+        }
 
         const provider = await getWeb3Provider();
         const abi = getAuditAbi();

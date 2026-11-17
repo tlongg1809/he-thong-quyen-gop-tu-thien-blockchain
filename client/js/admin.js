@@ -50,6 +50,10 @@ const slashReason = document.getElementById("slashReason");
 const btnRefundStake = document.getElementById("btnRefundStake");
 const btnSlashStake = document.getElementById("btnSlashStake");
 
+// Hint containers cho Form 2 & Form 3
+const disburseCampaignHint = document.getElementById("disburseCampaignHint");
+const execRequestHint = document.getElementById("execRequestHint");
+
 /**
  * Helper hiển thị toast thông báo nếu có sẵn, hoặc fallback dùng alert
  */
@@ -65,64 +69,13 @@ function notify(type, title, message) {
 
 /**
  * Trình bóc tách lỗi Smart Contract & Web3 thân thiện với người dùng
- * Khắc phục triệt để lỗi hiển thị "require(false)" mơ hồ khi EVM revert.
+ * Sử dụng trực tiếp từ web3-common.js để bảo đảm tính nhất quán và triệt tiêu hoàn toàn lỗi đệ quy RangeError.
  */
-function parseContractError(err) {
+function getContractErrorMessage(err) {
   if (typeof window.parseContractError === "function") {
     return window.parseContractError(err);
   }
-  if (!err) return "Đã xảy ra lỗi không xác định.";
-
-  if (
-    err.code === 4001 ||
-    err.code === "ACTION_REJECTED" ||
-    (err.message && err.message.toLowerCase().includes("user rejected"))
-  ) {
-    return "Bạn đã từ chối ký xác nhận giao dịch trên ví MetaMask.";
-  }
-
-  if (
-    err.code === "INSUFFICIENT_FUNDS" ||
-    (err.message && err.message.toLowerCase().includes("insufficient funds"))
-  ) {
-    return "Số dư ví SepoliaETH của bạn không đủ để thanh toán tiền ký quỹ và phí gas giao dịch.";
-  }
-
-  if (
-    err.reason &&
-    err.reason !== "require(false)" &&
-    !err.reason.includes("execution reverted") &&
-    !err.reason.includes("missing revert data")
-  ) {
-    return err.reason;
-  }
-
-  if (err.data && typeof err.data === "string" && err.data.length > 10 && typeof CHARITY_CONTRACT_ABI !== "undefined") {
-    try {
-      const iface = new ethers.Interface(CHARITY_CONTRACT_ABI);
-      const parsedErr = iface.parseError(err.data);
-      if (parsedErr) return `Lỗi Smart Contract: ${parsedErr.name}`;
-    } catch (_) {}
-  }
-
-  const rawMsg = err.shortMessage || err.info?.error?.message || err.message || String(err);
-  if (
-    err.reason === "require(false)" ||
-    rawMsg.includes("require(false)") ||
-    rawMsg.includes("execution reverted") ||
-    rawMsg.includes("missing revert data") ||
-    rawMsg.includes("CALL_EXCEPTION")
-  ) {
-    return (
-      "Giao dịch bị từ chối bởi Smart Contract (Execution Reverted).\n\n" +
-      "💡 Các nguyên nhân chính:\n" +
-      "1. Smart Contract tại địa chỉ hiện tại chưa được cập nhật phiên bản mới (Dynamic Stake + Lưu băm ảnh SHA-256). Hãy Deploy lại file contracts/CharityDonation.sol trên Remix và dán địa chỉ mới vào server/.env.\n" +
-      "2. Số dư ví không đủ 0.05 ETH để đặt cọc ký quỹ chiến dịch.\n" +
-      "3. Không đúng quyền quản lý hoặc thông tin không hợp lệ."
-    );
-  }
-
-  return rawMsg;
+  return err?.shortMessage || err?.message || String(err);
 }
 
 // Tính toán mức ký quỹ bắt buộc (Dynamic Stake): max(0.05 ETH, 2% target)
@@ -145,7 +98,7 @@ function setupDeadlinePicker() {
   if (!campaignDeadline) return;
   const tomorrow = new Date(Date.now() + 86400000);
   const defaultDate = new Date(Date.now() + 30 * 86400000);
-  
+
   campaignDeadline.min = tomorrow.toISOString().split("T")[0];
   if (!campaignDeadline.value) {
     campaignDeadline.value = defaultDate.toISOString().split("T")[0];
@@ -170,15 +123,195 @@ function setupDeadlinePicker() {
 }
 
 /**
+ * Cập nhật thông tin chiến dịch và số dư khả dụng theo thời gian thực (Form 2)
+ */
+async function updateDisburseCampaignHint() {
+  if (!disburseCampaignHint) return;
+  const rawId = disburseCampaignId?.value?.trim();
+  if (rawId === "" || isNaN(rawId)) {
+    disburseCampaignHint.style.display = "none";
+    disburseCampaignHint.innerHTML = "";
+    return;
+  }
+
+  const campaignId = parseInt(rawId, 10);
+  if (campaignId < 0) {
+    disburseCampaignHint.style.display = "block";
+    disburseCampaignHint.innerHTML = `<span class="hint-badge hint-badge-danger"><i class="fa-solid fa-triangle-exclamation"></i> Mã Campaign ID không thể là số âm</span>`;
+    return;
+  }
+
+  const c = contract || (typeof getWeb3Provider === "function" && typeof CHARITY_CONTRACT_ABI !== "undefined" && typeof CHARITY_CONTRACT_ADDRESS !== "undefined" ? new ethers.Contract(CHARITY_CONTRACT_ADDRESS, CHARITY_CONTRACT_ABI, await getWeb3Provider()) : null);
+  if (!c) return;
+
+  try {
+    const totalCount = await c.campaignCount();
+    if (campaignId >= Number(totalCount)) {
+      disburseCampaignHint.style.display = "block";
+      disburseCampaignHint.innerHTML = `
+        <div class="disburse-info-box">
+          <span class="hint-badge hint-badge-danger">
+            <i class="fa-solid fa-circle-xmark"></i> Chiến dịch #${campaignId} không tồn tại (Hệ thống hiện có ${totalCount} chiến dịch: #0 đến #${Number(totalCount) > 0 ? Number(totalCount) - 1 : 0}).
+          </span>
+        </div>
+      `;
+      return;
+    }
+
+    const camp = await c.campaigns(campaignId);
+    const raisedEth = ethers.formatEther(camp.raisedAmount);
+    const disbursedEth = ethers.formatEther(camp.disbursedAmount);
+    const availWei = BigInt(camp.raisedAmount) - BigInt(camp.disbursedAmount);
+    const availEth = ethers.formatEther(availWei);
+
+    const activeAccount = (currentAccount || (signer ? await signer.getAddress() : "") || "").toLowerCase();
+    const isManager = activeAccount && (activeAccount === camp.manager.toLowerCase());
+
+    let statusBadge = `<span class="hint-badge hint-badge-success"><i class="fa-solid fa-circle-check"></i> Đang hoạt động</span>`;
+    if (camp.isCancelled) {
+      statusBadge = `<span class="hint-badge hint-badge-danger"><i class="fa-solid fa-ban"></i> Đã bị hủy</span>`;
+    } else if (camp.stakeSlashed) {
+      statusBadge = `<span class="hint-badge hint-badge-danger"><i class="fa-solid fa-triangle-exclamation"></i> Bị xử phạt (Slashed)</span>`;
+    } else if (camp.isClosed) {
+      statusBadge = `<span class="hint-badge hint-badge-warning"><i class="fa-solid fa-lock"></i> Đã đóng</span>`;
+    }
+
+    let managerBadge = "";
+    if (activeAccount) {
+      if (isManager) {
+        managerBadge = `<span class="hint-badge hint-badge-success"><i class="fa-solid fa-user-check"></i> Bạn là Quản lý</span>`;
+      } else {
+        managerBadge = `<span class="hint-badge hint-badge-warning"><i class="fa-solid fa-user-xmark"></i> Không phải ví Quản lý</span>`;
+      }
+    }
+
+    const availDisplay = availWei > 0n
+      ? `<span class="avail-val">${availEth} ETH</span>`
+      : `<span style="color: #ef4444; font-weight: 700;">0 ETH (Hết số dư để giải ngân)</span>`;
+
+    const maxButton = availWei > 0n && isManager
+      ? `<button type="button" class="btn-fill-max" onclick="fillMaxDisburse('${availEth}')"><i class="fa-solid fa-bolt"></i> Rút tối đa</button>`
+      : "";
+
+    disburseCampaignHint.style.display = "block";
+    disburseCampaignHint.innerHTML = `
+      <div class="disburse-info-box">
+        <div class="info-row title-row">
+          <span><strong>📌 Chiến dịch #${campaignId}:</strong> <span style="font-weight: 600; color: #0f172a;">${camp.title}</span></span>
+          ${statusBadge}
+        </div>
+        <div class="info-row">
+          <span>Người quản lý: <code title="${camp.manager}">${camp.manager ? `${camp.manager.slice(0, 6)}...${camp.manager.slice(-4)}` : '--'}</code></span>
+          ${managerBadge}
+        </div>
+        <div class="info-row">
+          <span>Đã quyên góp: <b>${raisedEth} ETH</b> | Đã giải ngân: <b>${disbursedEth} ETH</b></span>
+        </div>
+        <div class="info-row highlight-balance">
+          <span>💰 <b>Khả dụng giải ngân:</b> ${availDisplay}</span>
+          ${maxButton}
+        </div>
+      </div>
+    `;
+  } catch (err) {
+    console.warn("Lỗi tra cứu thông tin chiến dịch giải ngân:", err);
+  }
+}
+
+// Hàm gán số tiền khả dụng tối đa vào ô disburseAmount
+window.fillMaxDisburse = function (amountStr) {
+  if (disburseAmount) {
+    disburseAmount.value = amountStr;
+    disburseAmount.focus();
+  }
+};
+
+/**
+ * Cập nhật thông tin yêu cầu giải ngân theo thời gian thực (Form 3)
+ */
+async function updateExecRequestHint() {
+  if (!execRequestHint) return;
+  const rawCId = execCampaignId?.value?.trim();
+  const rawRId = execRequestId?.value?.trim();
+
+  if (rawCId === "" || rawRId === "" || isNaN(rawCId) || isNaN(rawRId)) {
+    execRequestHint.style.display = "none";
+    execRequestHint.innerHTML = "";
+    return;
+  }
+
+  const cId = parseInt(rawCId, 10);
+  const rId = parseInt(rawRId, 10);
+  if (cId < 0 || rId < 0) return;
+
+  const c = contract || (typeof getWeb3Provider === "function" && typeof CHARITY_CONTRACT_ABI !== "undefined" && typeof CHARITY_CONTRACT_ADDRESS !== "undefined" ? new ethers.Contract(CHARITY_CONTRACT_ADDRESS, CHARITY_CONTRACT_ABI, await getWeb3Provider()) : null);
+  if (!c) return;
+
+  try {
+    const totalCount = await c.campaignCount();
+    if (cId >= Number(totalCount)) {
+      execRequestHint.style.display = "block";
+      execRequestHint.innerHTML = `<span class="hint-badge hint-badge-danger"><i class="fa-solid fa-circle-xmark"></i> Chiến dịch #${cId} không tồn tại.</span>`;
+      return;
+    }
+
+    const req = await c.getDisbursementRequest(cId, rId);
+    const amountEth = ethers.formatEther(req.amount);
+    const adminAddr = (await c.systemAdmin()).toLowerCase();
+    const activeAccount = (currentAccount || (signer ? await signer.getAddress() : "") || "").toLowerCase();
+    const isAdmin = activeAccount && (activeAccount === adminAddr);
+
+    let statusBadge = req.isExecuted
+      ? `<span class="hint-badge hint-badge-success"><i class="fa-solid fa-circle-check"></i> Đã thực thi</span>`
+      : `<span class="hint-badge hint-badge-warning"><i class="fa-solid fa-clock"></i> Chờ duyệt</span>`;
+
+    let adminBadge = "";
+    if (activeAccount) {
+      if (isAdmin) {
+        adminBadge = `<span class="hint-badge hint-badge-success"><i class="fa-solid fa-shield-halved"></i> Bạn là Admin</span>`;
+      } else {
+        adminBadge = `<span class="hint-badge hint-badge-danger"><i class="fa-solid fa-triangle-exclamation"></i> Không phải Admin</span>`;
+      }
+    }
+
+    execRequestHint.style.display = "block";
+    execRequestHint.innerHTML = `
+      <div class="disburse-info-box">
+        <div class="info-row title-row">
+          <span><strong>📋 Yêu cầu #${rId} (Chiến dịch #${cId})</strong></span>
+          ${statusBadge}
+        </div>
+        <div class="info-row">
+          <span>Mục đích: <b>${req.purpose}</b></span>
+          <span>Số tiền: <b style="color: #0284c7;">${amountEth} ETH</b></span>
+        </div>
+        <div class="info-row">
+          <span>Thụ hưởng: <code>${req.recipient ? `${req.recipient.slice(0, 6)}...${req.recipient.slice(-4)}` : '--'}</code></span>
+          ${adminBadge}
+        </div>
+        <div class="info-row" style="font-size: 0.8rem; color: #64748b;">
+          <span>Chứng từ: <code>${req.proofHash || "--"}</code></span>
+        </div>
+      </div>
+    `;
+  } catch (err) {
+    execRequestHint.style.display = "block";
+    execRequestHint.innerHTML = `<span class="hint-badge hint-badge-warning"><i class="fa-solid fa-triangle-exclamation"></i> Không tìm thấy yêu cầu #${rId} trong chiến dịch #${cId}.</span>`;
+  }
+}
+
+/**
  * Khởi tạo ứng dụng & nạp cấu hình hợp đồng
  */
 async function init() {
-  if (typeof loadContractConfig === "function") {
+  if (typeof initContractConfig === "function") {
+    await initContractConfig();
+  } else if (typeof loadContractConfig === "function") {
     await loadContractConfig();
   }
 
-  if (!CHARITY_CONTRACT_ADDRESS) {
-    notify("error", "Lỗi cấu hình", "Chưa cấu hình CHARITY_CONTRACT_ADDRESS hợp lệ trong file .env!");
+  if (!CHARITY_CONTRACT_ADDRESS || !CHARITY_CONTRACT_ADDRESS.startsWith("0x")) {
+    notify("error", "Lỗi cấu hình", "Chưa cấu hình CONTRACT_ADDRESS hợp lệ trong file server/.env!");
     return;
   }
 
@@ -191,8 +324,8 @@ async function init() {
           imagePreviewImg.src = URL.createObjectURL(file);
           imagePreviewName.innerText = file.name;
           const sizeKb = (file.size / 1024).toFixed(1);
-          const sizeStr = file.size > 1024 * 1024 
-            ? `${(file.size / (1024 * 1024)).toFixed(2)} MB` 
+          const sizeStr = file.size > 1024 * 1024
+            ? `${(file.size / (1024 * 1024)).toFixed(2)} MB`
             : `${sizeKb} KB`;
           imagePreviewSize.innerText = `Dung lượng: ${sizeStr} • Định dạng: ${file.type || 'image'}`;
           imagePreviewContainer.style.display = "flex";
@@ -227,6 +360,20 @@ async function init() {
 
   // Khởi tạo ô chọn ngày kết thúc
   setupDeadlinePicker();
+
+  // Lắng nghe cập nhật thông tin giải ngân theo thời gian thực (Form 2 & Form 3)
+  if (disburseCampaignId) {
+    disburseCampaignId.addEventListener("input", updateDisburseCampaignHint);
+    disburseCampaignId.addEventListener("change", updateDisburseCampaignHint);
+  }
+  if (execCampaignId) {
+    execCampaignId.addEventListener("input", updateExecRequestHint);
+    execCampaignId.addEventListener("change", updateExecRequestHint);
+  }
+  if (execRequestId) {
+    execRequestId.addEventListener("input", updateExecRequestHint);
+    execRequestId.addEventListener("change", updateExecRequestHint);
+  }
 
   if (window.ethereum) {
     provider = new ethers.BrowserProvider(window.ethereum);
@@ -330,6 +477,9 @@ async function handleAccountConnected(account) {
     } catch (contractErr) {
       console.warn("⚠️ Cảnh báo: Smart Contract tại địa chỉ hiện tại chưa hỗ trợ Dynamic Stake:", contractErr);
     }
+    // Cập nhật thông tin hint giải ngân nếu người dùng đã nhập sẵn ID
+    updateDisburseCampaignHint();
+    updateExecRequestHint();
   } catch (e) {
     console.warn("Không thể kiểm tra vai trò Admin:", e);
   }
@@ -628,7 +778,7 @@ if (formCreateCampaign) {
     } catch (err) {
       console.error("Lỗi tạo chiến dịch:", err);
       if (typeof resetTimeline === "function") resetTimeline("timelineCreate");
-      const parsedMsg = parseContractError(err);
+      const parsedMsg = getContractErrorMessage(err);
       notify("error", "Tạo chiến dịch thất bại", parsedMsg);
     } finally {
       if (typeof setTxLoading === "function") setTxLoading(false);
@@ -646,33 +796,116 @@ if (formRequestDisbursement) {
     e.preventDefault();
 
     if (!contract || !signer) {
-      notify("warning", "Chưa kết nối ví", "Vui lòng kết nối ví trước!");
+      notify("warning", "Chưa kết nối ví", "Vui lòng kết nối ví MetaMask trước khi thực hiện!");
       return;
     }
 
-    const campaignId = parseInt(disburseCampaignId.value, 10);
+    const idVal = disburseCampaignId?.value?.trim();
+    if (idVal === "" || isNaN(idVal)) {
+      notify("warning", "Thiếu thông tin", "Vui lòng nhập Mã chiến dịch (Campaign ID) hợp lệ!");
+      return;
+    }
+
+    const campaignId = parseInt(idVal, 10);
     const purpose = disbursePurpose.value.trim();
-    const amountEth = disburseAmount.value;
+    const amountEth = disburseAmount.value.trim();
     const recipient = disburseRecipient.value.trim();
     const proofHash = disburseProof.value.trim();
 
+    if (!purpose) {
+      notify("warning", "Thiếu mục đích", "Vui lòng nhập mục đích chi tiêu cụ thể!");
+      return;
+    }
+    if (!amountEth || isNaN(amountEth) || parseFloat(amountEth) <= 0) {
+      notify("warning", "Số tiền không hợp lệ", "Số tiền giải ngân phải lớn hơn 0 ETH!");
+      return;
+    }
     if (!ethers.isAddress(recipient)) {
-      notify("error", "Địa chỉ không hợp lệ", "Địa chỉ ví đơn vị thụ hưởng không hợp lệ!");
+      notify("error", "Địa chỉ không hợp lệ", "Địa chỉ ví đơn vị thụ hưởng không đúng định dạng Ethereum (0x...)!");
+      return;
+    }
+    if (!proofHash) {
+      notify("warning", "Thiếu chứng từ", "Vui lòng nhập mã băm chứng từ (IPFS CID hoặc link biên lai)!");
       return;
     }
 
+    // ── Kiểm tra dữ liệu và quyền hạn trên Blockchain trước khi gọi ví MetaMask ──
     try {
+      const totalCount = await contract.campaignCount();
+      if (campaignId >= Number(totalCount)) {
+        notify(
+          "error",
+          "Chiến dịch không tồn tại",
+          `Chiến dịch #${campaignId} không tồn tại trên hệ thống (Hiện có ${totalCount} chiến dịch: từ #0 đến #${Number(totalCount) > 0 ? Number(totalCount) - 1 : 0}).`
+        );
+        return;
+      }
+
+      const camp = await contract.campaigns(campaignId);
+      const userAddr = (await signer.getAddress()).toLowerCase();
+      const managerAddr = (camp.manager || "").toLowerCase();
+
+      // 1. Kiểm tra quyền quản lý
+      if (userAddr !== managerAddr) {
+        notify(
+          "error",
+          "Không có quyền quản lý",
+          `Chỉ người quản lý chiến dịch (${shortenAddress(camp.manager)}) mới có quyền gửi yêu cầu giải ngân!\nVí hiện tại của bạn: ${shortenAddress(userAddr)}`
+        );
+        return;
+      }
+
+      // 2. Kiểm tra trạng thái chiến dịch
+      if (camp.isCancelled) {
+        notify("error", "Chiến dịch đã bị hủy", `Chiến dịch "${camp.title}" đã bị hủy bỏ do vi phạm chính sách, không thể đề xuất giải ngân!`);
+        return;
+      }
+      if (camp.stakeSlashed) {
+        notify("error", "Chiến dịch bị phong tỏa", `Chiến dịch "${camp.title}" đã bị xử phạt tịch thu tiền ký quỹ, mọi hoạt động giải ngân đã bị đình chỉ!`);
+        return;
+      }
+
+      // 3. Kiểm tra số dư quỹ khả dụng
+      const raisedWei = BigInt(camp.raisedAmount);
+      const disbursedWei = BigInt(camp.disbursedAmount);
+      const availableWei = raisedWei - disbursedWei;
+      const requestedWei = ethers.parseEther(amountEth);
+
+      if (availableWei <= 0n) {
+        notify(
+          "error",
+          "Số dư quỹ bằng 0",
+          `Chiến dịch "${camp.title}" hiện chưa có số dư khả dụng để giải ngân!\n` +
+          `• Tổng quyên góp: ${ethers.formatEther(raisedWei)} ETH\n` +
+          `• Đã giải ngân: ${ethers.formatEther(disbursedWei)} ETH\n` +
+          `• Khả dụng hiện tại: 0 ETH`
+        );
+        return;
+      }
+
+      if (requestedWei > availableWei) {
+        notify(
+          "error",
+          "Số dư quỹ không đủ giải ngân",
+          `Số tiền bạn yêu cầu (${amountEth} ETH) vượt quá số dư khả dụng hiện có của chiến dịch!\n` +
+          `• Số dư khả dụng hiện tại: ${ethers.formatEther(availableWei)} ETH\n` +
+          `• Số tiền bạn nhập: ${amountEth} ETH\n` +
+          `💡 Vui lòng điều chỉnh số tiền giải ngân tối đa không quá ${ethers.formatEther(availableWei)} ETH.`
+        );
+        return;
+      }
+
+      // ── Gửi giao dịch lên Blockchain ──
       btnSubmitDisburse.disabled = true;
       btnSubmitDisburse.innerText = "Đang gửi đề xuất...";
 
       if (typeof updateTimeline === "function") updateTimeline("timelineDisburse", 1);
       if (typeof setTxLoading === "function") setTxLoading(true, "Đang gửi đề xuất giải ngân…", "Xác nhận trên MetaMask");
 
-      const amountWei = ethers.parseEther(amountEth);
       const tx = await contract.requestDisbursement(
         campaignId,
         purpose,
-        amountWei,
+        requestedWei,
         recipient,
         proofHash,
       );
@@ -685,10 +918,11 @@ if (formRequestDisbursement) {
       if (typeof updateTimeline === "function") updateTimeline("timelineDisburse", 3);
       notify("success", "Đề xuất thành công", `Đề xuất giải ngân đã được ghi nhận trên chuỗi!\nTxHash: ${tx.hash}`);
       formRequestDisbursement.reset();
+      updateDisburseCampaignHint();
     } catch (err) {
       console.error("Lỗi đề xuất giải ngân:", err);
       if (typeof resetTimeline === "function") resetTimeline("timelineDisburse");
-      const parsedMsg = parseContractError(err);
+      const parsedMsg = getContractErrorMessage(err);
       notify("error", "Yêu cầu giải ngân thất bại", parsedMsg);
     } finally {
       if (typeof setTxLoading === "function") setTxLoading(false);
@@ -706,14 +940,77 @@ if (formExecuteDisbursement) {
     e.preventDefault();
 
     if (!contract || !signer) {
-      notify("warning", "Chưa kết nối ví", "Vui lòng kết nối ví trước!");
+      notify("warning", "Chưa kết nối ví", "Vui lòng kết nối ví MetaMask trước!");
       return;
     }
 
-    const campaignId = parseInt(execCampaignId.value, 10);
-    const requestId = parseInt(execRequestId.value, 10);
+    const cIdVal = execCampaignId?.value?.trim();
+    const rIdVal = execRequestId?.value?.trim();
+    if (cIdVal === "" || rIdVal === "" || isNaN(cIdVal) || isNaN(rIdVal)) {
+      notify("warning", "Thiếu thông tin", "Vui lòng nhập Mã chiến dịch và Mã yêu cầu giải ngân!");
+      return;
+    }
 
+    const campaignId = parseInt(cIdVal, 10);
+    const requestId = parseInt(rIdVal, 10);
+
+    // ── Kiểm tra quyền Admin & tính hợp lệ của đề xuất trước khi gọi MetaMask ──
     try {
+      const adminAddr = (await contract.systemAdmin()).toLowerCase();
+      const userAddr = (await signer.getAddress()).toLowerCase();
+
+      // 1. Kiểm tra quyền Admin hệ thống
+      if (userAddr !== adminAddr) {
+        notify(
+          "error",
+          "Từ chối quyền Admin",
+          `Chỉ Quản trị viên hệ thống (${shortenAddress(adminAddr)}) mới có quyền thực thi chuyển quỹ giải ngân!\nVí hiện tại của bạn: ${shortenAddress(userAddr)}`
+        );
+        return;
+      }
+
+      // 2. Kiểm tra tồn tại chiến dịch
+      const totalCount = await contract.campaignCount();
+      if (campaignId >= Number(totalCount)) {
+        notify("error", "Chiến dịch không tồn tại", `Chiến dịch #${campaignId} không tồn tại trên hệ thống.`);
+        return;
+      }
+
+      // 3. Kiểm tra thông tin đề xuất giải ngân
+      let req;
+      try {
+        req = await contract.getDisbursementRequest(campaignId, requestId);
+      } catch (getErr) {
+        notify("error", "Yêu cầu không tồn tại", `Không tìm thấy yêu cầu giải ngân #${requestId} trong chiến dịch #${campaignId}.`);
+        return;
+      }
+
+      if (req.isExecuted) {
+        notify(
+          "warning",
+          "Yêu cầu đã thực thi",
+          `Yêu cầu #${requestId} của chiến dịch #${campaignId} đã được thực thi và chuyển tiền thành công trước đó!`
+        );
+        return;
+      }
+
+      const camp = await contract.campaigns(campaignId);
+      if (camp.isCancelled || camp.stakeSlashed) {
+        notify("error", "Chiến dịch bị phong tỏa", `Chiến dịch #${campaignId} đã bị hủy hoặc phong tỏa do vi phạm, không thể giải ngân!`);
+        return;
+      }
+
+      const availableWei = BigInt(camp.raisedAmount) - BigInt(camp.disbursedAmount);
+      if (BigInt(req.amount) > availableWei) {
+        notify(
+          "error",
+          "Số dư quỹ không đủ",
+          `Số dư quỹ khả dụng (${ethers.formatEther(availableWei)} ETH) không đủ để thực thi giải ngân khoản ${ethers.formatEther(req.amount)} ETH!`
+        );
+        return;
+      }
+
+      // ── Thực thi giao dịch ──
       btnSubmitExec.disabled = true;
       btnSubmitExec.innerText = "Đang thực thi chuyển quỹ...";
 
@@ -747,13 +1044,15 @@ if (formExecuteDisbursement) {
       notify(
         "success",
         "Giải ngân thành công!",
-        `Tiền đã chuyển đến ví thụ hưởng! Khoản ký quỹ 0.05 ETH cũng đã được tự động hoàn trả cho người tạo.\nTxHash: ${tx.hash}`
+        `Tiền đã chuyển đến ví thụ hưởng! Khoản ký quỹ cũng đã được xử lý minh bạch.\nTxHash: ${tx.hash}`
       );
       formExecuteDisbursement.reset();
+      updateExecRequestHint();
+      updateDisburseCampaignHint();
     } catch (err) {
       console.error("Lỗi thực thi giải ngân:", err);
       if (typeof resetTimeline === "function") resetTimeline("timelineExec");
-      const parsedMsg = parseContractError(err);
+      const parsedMsg = getContractErrorMessage(err);
       notify("error", "Thực thi thất bại", parsedMsg);
     } finally {
       if (typeof setTxLoading === "function") setTxLoading(false);
@@ -769,7 +1068,7 @@ if (formExecuteDisbursement) {
 if (btnRefundStake) {
   btnRefundStake.addEventListener("click", async () => {
     if (!contract || !signer) {
-      notify("warning", "Chưa kết nối ví", "Vui lòng kết nối ví trước!");
+      notify("warning", "Chưa kết nối ví", "Vui lòng kết nối ví MetaMask trước!");
       return;
     }
     const idVal = stakeCampaignId?.value?.trim();
@@ -780,6 +1079,38 @@ if (btnRefundStake) {
     const cId = parseInt(idVal, 10);
 
     try {
+      const totalCount = await contract.campaignCount();
+      if (cId >= Number(totalCount)) {
+        notify("error", "Chiến dịch không tồn tại", `Chiến dịch #${cId} không tồn tại trên hệ thống.`);
+        return;
+      }
+
+      const camp = await contract.campaigns(cId);
+      const userAddr = (await signer.getAddress()).toLowerCase();
+      const adminAddr = (await contract.systemAdmin()).toLowerCase();
+      const creatorAddr = (camp.creator || "").toLowerCase();
+
+      if (userAddr !== creatorAddr && userAddr !== adminAddr) {
+        notify("error", "Từ chối quyền truy cập", `Chỉ người tạo chiến dịch (${shortenAddress(camp.creator)}) hoặc Admin mới có quyền rút lại tiền ký quỹ!`);
+        return;
+      }
+      if (camp.stakeRefunded) {
+        notify("warning", "Đã hoàn trả", `Tiền ký quỹ của chiến dịch #${cId} đã được hoàn trả trước đó!`);
+        return;
+      }
+      if (camp.stakeSlashed) {
+        notify("error", "Ký quỹ đã bị tịch thu", `Tiền ký quỹ của chiến dịch #${cId} đã bị tịch thu (Slashing) do vi phạm, không thể hoàn trả!`);
+        return;
+      }
+      if (camp.isCancelled) {
+        notify("error", "Chiến dịch bị hủy", `Chiến dịch #${cId} đã bị hủy do vi phạm, tiền ký quỹ không được phép hoàn trả!`);
+        return;
+      }
+      if (BigInt(camp.disbursedAmount) <= 0n) {
+        notify("warning", "Chưa đủ điều kiện", `Chiến dịch #${cId} chưa thực hiện đợt giải ngân minh bạch nào! Cần ít nhất 1 đợt giải ngân thành công để rút lại tiền ký quỹ.`);
+        return;
+      }
+
       btnRefundStake.disabled = true;
       btnRefundStake.innerText = "Đang gửi yêu cầu hoàn ký quỹ...";
       if (typeof setTxLoading === "function") setTxLoading(true, "Đang yêu cầu hoàn trả tiền ký quỹ…", "Xác nhận trên MetaMask");
@@ -787,10 +1118,10 @@ if (btnRefundStake) {
       const tx = await contract.refundStake(cId);
       await tx.wait();
 
-      notify("success", "Hoàn ký quỹ thành công!", `Đã chuyển trả 0.05 ETH tiền ký quỹ cho người tạo chiến dịch #${cId}!\nTxHash: ${tx.hash}`);
+      notify("success", "Hoàn ký quỹ thành công!", `Đã chuyển trả tiền ký quỹ cho người tạo chiến dịch #${cId}!\nTxHash: ${tx.hash}`);
     } catch (err) {
       console.error("Lỗi hoàn trả ký quỹ:", err);
-      const parsedMsg = parseContractError(err);
+      const parsedMsg = getContractErrorMessage(err);
       notify("error", "Hoàn ký quỹ thất bại", parsedMsg);
     } finally {
       if (typeof setTxLoading === "function") setTxLoading(false);
@@ -817,11 +1148,31 @@ if (btnSlashStake) {
     const cId = parseInt(idVal, 10);
     const reason = slashReason?.value?.trim() || "Vi pham quy che minh bach tu thien";
 
-    if (!confirm(`CẢNH BÁO: Bạn chắc chắn muốn TỊCH THU TIỀN KÝ QUỸ (Slashing) và ĐÓNG VĨNH VIỄN chiến dịch #${cId} do vi phạm?\nLý do: "${reason}"\n\nSau khi kích hoạt, các nhà hảo tâm sẽ có quyền rút lại tiền đã quyên góp (Claim Refund)!`)) {
-      return;
-    }
-
     try {
+      const adminAddr = (await contract.systemAdmin()).toLowerCase();
+      const userAddr = (await signer.getAddress()).toLowerCase();
+
+      if (userAddr !== adminAddr) {
+        notify("error", "Từ chối quyền Admin", `Chỉ Quản trị viên hệ thống (${shortenAddress(adminAddr)}) mới có quyền thực thi Slashing và tịch thu tiền cọc!`);
+        return;
+      }
+
+      const totalCount = await contract.campaignCount();
+      if (cId >= Number(totalCount)) {
+        notify("error", "Chiến dịch không tồn tại", `Chiến dịch #${cId} không tồn tại trên hệ thống.`);
+        return;
+      }
+
+      const camp = await contract.campaigns(cId);
+      if (camp.stakeSlashed) {
+        notify("warning", "Đã tịch thu trước đó", `Chiến dịch #${cId} đã bị tịch thu tiền ký quỹ trước đó!`);
+        return;
+      }
+
+      if (!confirm(`CẢNH BÁO: Bạn chắc chắn muốn TỊCH THU TIỀN KÝ QUỸ (Slashing) và ĐÓNG VĨNH VIỄN chiến dịch #${cId} do vi phạm?\nLý do: "${reason}"\n\nSau khi kích hoạt, các nhà hảo tâm sẽ có quyền rút lại tiền đã quyên góp (Claim Refund)!`)) {
+        return;
+      }
+
       btnSlashStake.disabled = true;
       btnSlashStake.innerText = "Đang xử phạt (Slashing)...";
       if (typeof setTxLoading === "function") setTxLoading(true, "Đang thực thi Slashing tiền ký quỹ…", "Xử phạt chiến dịch vi phạm");
@@ -832,7 +1183,7 @@ if (btnSlashStake) {
       notify("success", "Đã tịch thu ký quỹ (Slashing)!", `Chiến dịch #${cId} đã bị đình chỉ và tịch thu tiền ký quỹ vào quỹ chung.\nCác nhà hảo tâm giờ đây có thể tự do Claim Refund.\nTxHash: ${tx.hash}`);
     } catch (err) {
       console.error("Lỗi Slashing:", err);
-      const parsedMsg = parseContractError(err);
+      const parsedMsg = getContractErrorMessage(err);
       notify("error", "Slashing thất bại", parsedMsg);
     } finally {
       if (typeof setTxLoading === "function") setTxLoading(false);

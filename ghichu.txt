@@ -319,3 +319,30 @@ IX. HOÀN THIỆN ĐỒNG BỘ GIAO DIỆN UI/UX, LOẠI BỎ TRIỆT ĐỂ LỖ
    - Form 3 (Thực thi giải ngân) trong `admin.js` tự động gửi AJAX POST sang `../server/api/proofs_api.php`
      để lưu `tx_hash` vào bảng `disbursement_proofs`.
 ========================================================================================
+
+========================================================================================
+X. BẢO MẬT & TỐI ƯU WEB3: GỠ BỎ TOÀN BỘ CONTRACT ADDRESS HARDCODE TRONG FILE JS,
+   NẠP ĐỘNG 100% TỪ SERVER/.ENV VÀ KHẮC PHỤC TRIỆT ĐỂ LỖI ĐỆ QUY MAXIMUM CALL STACK
+========================================================================================
+
+1. Gỡ bỏ triệt để việc lộ địa chỉ Contract (Hardcode) trong tất cả các file JavaScript:
+   - Đã rà soát và xóa bỏ hoàn toàn địa chỉ contract hardcode trong:
+     + `client/js/config.js`: Khởi tạo `CHARITY_CONTRACT_ADDRESS = ""` và `CONTRACT_ADDRESS = ""`.
+     + `client/js/web3-common.js`: Gỡ bỏ fallback địa chỉ cứng, tự động nạp bảo mật từ API.
+     + `client/js/audit.js`: Khởi tạo `APP_CONFIG.contractAddress = ""`.
+     + `client/js/app.js` & `client/js/donate.js`: Nạp động qua `initContractConfig()`.
+   - Cơ chế nạp bảo mật: Mọi trang giao diện gọi `config_api.php` để lấy `CONTRACT_ADDRESS`
+     trực tiếp từ `server/.env`. Khi thay đổi hợp đồng, quản trị viên chỉ cần cập nhật duy nhất
+     tại `server/.env`, không cần sửa bất kỳ file mã nguồn frontend nào.
+
+2. Khắc phục triệt để lỗi "RangeError: Maximum call stack size exceeded" tại admin.js:
+   - Thay thế hàm trùng tên `parseContractError` trong `admin.js` bằng hàm ủy quyền một chiều
+     `getContractErrorMessage(err)` gọi sang `window.parseContractError(err)` trong `web3-common.js`.
+   - Bổ sung bộ từ điển `CONTRACT_REVERT_DICT` dịch toàn bộ mã lỗi Revert từ `CharityDonation.sol`
+     thành thông điệp tiếng Việt lịch sự, dễ hiểu.
+
+3. Bổ sung cơ chế Pre-validation số dư và trạng thái giải ngân (Form 2 & Form 3):
+   - Thêm hộp thông tin trực quan theo thời gian thực (`#disburseCampaignHint`, `#execRequestHint`).
+   - Kiểm tra trước trên chuỗi: số dư khả dụng (`raisedAmount - disbursedAmount`), quyền quản lý,
+     trạng thái chiến dịch trước khi kích hoạt MetaMask. Chặn đứng lỗi revert tốn phí gas.
+========================================================================================

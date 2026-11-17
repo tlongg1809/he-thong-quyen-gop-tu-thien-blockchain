@@ -62,7 +62,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $supplier_name  = trim($input['supplier_name'] ?? 'Đơn vị cung ứng thực tế');
         $invoice_number = trim($input['invoice_number'] ?? ('HD-' . date('Ymd') . '-' . substr($tx_hash, 2, 4)));
         $description    = trim($input['description'] ?? ('Giải ngân thực tế cho chiến dịch #' . $campaign_id));
-        $ipfs_hash      = trim($input['ipfs_hash'] ?? 'bafybeidrka73ahngpdnnm2ckgweyqt4f5zsc5dsyezm5pknboq52rbe4fe');
+        $ipfs_hash      = trim($input['ipfs_hash'] ?? ($env['SAMPLE_IPFS_CID'] ?? ''));
 
         // Chèn mới hoặc cập nhật nếu đã tồn tại tx_hash (tránh duplicate key error)
         $stmt = $conn->prepare("INSERT INTO disbursement_proofs (tx_hash, campaign_id, supplier_name, invoice_number, description, ipfs_hash) 

@@ -99,6 +99,21 @@ async function fetchMetadataList() {
 
 async function loadCampaigns() {
     try {
+        await initContractConfig();
+
+        if (!CHARITY_CONTRACT_ADDRESS || !CHARITY_CONTRACT_ADDRESS.startsWith("0x")) {
+            console.error("Chưa nạp được CONTRACT_ADDRESS từ server/.env");
+            if (campaignsContainer) {
+                campaignsContainer.innerHTML = `
+                    <div style="grid-column: 1 / -1; text-align: center; padding: 48px 20px; background: #fff; border-radius: 16px; border: 1px dashed #fca5a5;">
+                        <i class="fa-solid fa-triangle-exclamation" style="font-size: 2.5rem; color: #ef4444; margin-bottom: 12px; display: block;"></i>
+                        <h3 style="font-size: 1.1rem; color: #b91c1c; margin-bottom: 6px;">Chưa cấu hình Smart Contract</h3>
+                        <p style="color: #64748b; font-size: 0.9rem;">Vui lòng thiết lập CONTRACT_ADDRESS trong file <code>server/.env</code> và đảm bảo máy chủ Apache đang chạy.</p>
+                    </div>`;
+            }
+            return;
+        }
+
         await fetchMetadataList();
 
         const readProvider = await getWeb3Provider();

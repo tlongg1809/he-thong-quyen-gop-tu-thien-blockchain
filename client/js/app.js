@@ -15,6 +15,12 @@ const txReceiptCard = document.getElementById("txReceiptCard");
 const txHashDisplay = document.getElementById("txHashDisplay");
 
 async function init() {
+    if (typeof initContractConfig === "function") {
+        await initContractConfig();
+    } else if (typeof loadContractConfig === "function") {
+        await loadContractConfig();
+    }
+
     if (window.ethereum) {
         provider = new ethers.BrowserProvider(window.ethereum);
         

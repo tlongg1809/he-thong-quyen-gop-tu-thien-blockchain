@@ -1,24 +1,33 @@
 // client/js/config.js
 
-// Giá trị mặc định từ .env (phòng trường hợp fetch API backend bị lỗi hoặc chạy không qua PHP server)
-let CHARITY_CONTRACT_ADDRESS = "0x83ae429B03C449dF9b255A917D65204Ee6be9CF6";
-let CONTRACT_ADDRESS = CHARITY_CONTRACT_ADDRESS;
+// Biến lưu địa chỉ Smart Contract - Nạp động 100% từ file server/.env thông qua config_api.php
+let CHARITY_CONTRACT_ADDRESS = "";
+let CONTRACT_ADDRESS = "";
 
-// Hàm đọc biến môi trường từ server/.env
+// Hàm đọc biến môi trường từ server/.env (Không hardcode địa chỉ ví hay hợp đồng vào file JS)
 async function loadContractConfig() {
+    if (CHARITY_CONTRACT_ADDRESS && CHARITY_CONTRACT_ADDRESS.startsWith("0x")) {
+        return CHARITY_CONTRACT_ADDRESS;
+    }
     try {
-        const response = await fetch("../server/config/config_api.php");
+        const apiPath = window.location.pathname.includes("/client/")
+            ? "../server/config/config_api.php"
+            : "server/config/config_api.php";
+
+        const response = await fetch(apiPath);
         if (response.ok) {
             const data = await response.json();
             if (data.contractAddress && data.contractAddress.startsWith("0x")) {
                 CHARITY_CONTRACT_ADDRESS = data.contractAddress;
                 CONTRACT_ADDRESS = data.contractAddress;
-                console.log("Đã tải CONTRACT_ADDRESS từ .env:", CHARITY_CONTRACT_ADDRESS);
+                console.log("Đã nạp CONTRACT_ADDRESS bảo mật từ server/.env:", CHARITY_CONTRACT_ADDRESS);
+                return CHARITY_CONTRACT_ADDRESS;
             }
         }
     } catch (e) {
-        console.warn("Dùng CONTRACT_ADDRESS mặc định do không gọi được config_api.php:", CHARITY_CONTRACT_ADDRESS, e);
+        console.warn("Không thể gọi config_api.php để tải CONTRACT_ADDRESS:", e);
     }
+    return CHARITY_CONTRACT_ADDRESS;
 }
 
 // ABI của Smart Contract CharityDonation (Phiên bản Dynamic Stake + Image SHA-256 + Donor Claim Refund)
